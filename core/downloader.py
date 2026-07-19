@@ -23,6 +23,7 @@ def download_episode(url: str, filepath: Path, quality: int):
 
     with Progress(
         TextColumn("[progress.description]{task.description}"),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         BarColumn(),
         DownloadColumn(),
         TransferSpeedColumn(),

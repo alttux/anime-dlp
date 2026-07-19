@@ -3,6 +3,10 @@ from anime_parsers_ru import KodikParser
 from core.token_manager import load_token, save_token
 
 
+def _clean_surrogates(text: str) -> str:
+    return "".join(c if not "\uD800" <= c <= "\uDFFF" else "?" for c in text)
+
+
 def _get_parser() -> KodikParser:
     token = load_token()
     parser = KodikParser(token=token, validate_token=token is not None)
@@ -12,6 +16,7 @@ def _get_parser() -> KodikParser:
 
 
 def search_anime(title: str) -> list[dict]:
+    title = _clean_surrogates(title)
     parser = _get_parser()
     results = parser.search(
         title=title,
