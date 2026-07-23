@@ -21,7 +21,7 @@ def search_anime(title: str) -> list[dict]:
     results = parser.search(
         title=title,
         include_material_data=True,
-        only_anime=False,
+        only_anime=True,
         strict=False,
     )
     seen = {}

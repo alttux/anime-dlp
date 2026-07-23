@@ -23,8 +23,9 @@ from core.downloader import download_episode
 
 
 def _sanitize_filename(name: str) -> str:
-    allowed = set(" .-_()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-    return "".join(c for c in name if c in allowed).strip() or "anime"
+    allowed = set(" .-_()[]")
+    cleaned = "".join(c for c in name if c.isalnum() or c in allowed).strip()
+    return cleaned or "anime"
 
 
 def run_cli(download_dir: Path):
@@ -81,7 +82,7 @@ def run_cli(download_dir: Path):
         if ep == 0:
             filename = f"{safe_title}.mp4"
         else:
-            filename = f"{safe_title} - {ep:03d}.mp4"
+            filename = f"{safe_title} - {ep}.mp4"
 
         filepath = download_dir / filename
         show_info(f"Скачивание [bold]{filename}[/] ({quality}p)")
