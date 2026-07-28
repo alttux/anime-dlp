@@ -82,7 +82,7 @@ def run_cli(download_dir: Path):
         if ep == 0:
             filename = f"{safe_title}.mp4"
         else:
-            filename = f"{safe_title} - {ep}.mp4"
+            filename = f"{ep}.mp4"
 
         filepath = download_dir / filename
         show_info(f"Скачивание [bold]{filename}[/] ({quality}p)")
