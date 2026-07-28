@@ -1,8 +1,8 @@
 import argparse
 from pathlib import Path
 
-from config import DOWNLOAD_DIR
-from src.cli import run_cli
+from anime_dlp.config import DOWNLOAD_DIR
+from anime_dlp.cli import run_cli
 
 
 def main():

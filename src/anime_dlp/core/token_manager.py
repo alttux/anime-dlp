@@ -1,4 +1,4 @@
-from config import BASE_DIR, TOKEN_FILE
+from anime_dlp.config import BASE_DIR, TOKEN_FILE
 
 
 def _get_token_path():

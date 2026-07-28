@@ -10,7 +10,7 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 
-from config import HEADERS
+from anime_dlp.config import HEADERS
 
 
 def download_episode(url: str, filepath: Path, quality: int):

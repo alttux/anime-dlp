@@ -1,6 +1,6 @@
 from rich.prompt import IntPrompt, Prompt
 
-from cli.display import console
+from anime_dlp.cli.display import console
 
 
 def ask_title() -> str:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from rich.status import Status
 
-from cli.display import (
+from anime_dlp.cli.display import (
     console,
     print_banner,
     show_anime_table,
@@ -12,14 +12,14 @@ from cli.display import (
     show_success,
     show_translations_table,
 )
-from cli.prompts import (
+from anime_dlp.cli.prompts import (
     ask_anime_choice,
     ask_episode,
     ask_title,
     ask_translation_choice,
 )
-from core.anime_service import get_anime_info, get_download_link, search_anime
-from core.downloader import download_episode
+from anime_dlp.core.anime_service import get_anime_info, get_download_link, search_anime
+from anime_dlp.core.downloader import download_episode
 
 
 def _sanitize_filename(name: str) -> str:

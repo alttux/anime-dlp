@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anime-dlp"
+version = "1.0.0"
+description = "CLI утилита для скачивания аниме с плеера Kodik"
+requires-python = ">= 3.10"
+license = "MIT"
+authors = [
+    {name = "alttux"},
+]
+keywords = ["anime", "downloader", "cli", "kodik"]
+classifiers = [
+    "Environment :: Console",
+    "Natural Language :: Russian",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Utilities",
+]
+
+dependencies = [
+    "anime_parsers_ru>=1.17.0",
+    "beautifulsoup4>=4.15.0",
+    "requests>=2.34.2",
+    "rich>=15.0.0",
+]
+
+[project.scripts]
+anime-dlp = "anime_dlp.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

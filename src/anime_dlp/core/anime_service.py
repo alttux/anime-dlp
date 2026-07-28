@@ -1,6 +1,6 @@
 from anime_parsers_ru import KodikParser
 
-from core.token_manager import load_token, save_token
+from anime_dlp.core.token_manager import load_token, save_token
 
 
 def _clean_surrogates(text: str) -> str:
