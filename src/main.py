@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 from config import DOWNLOAD_DIR
-from cli import run_cli
+from src.cli import run_cli
 
 
 def main():
