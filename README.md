@@ -119,6 +119,18 @@ anime-dlp --gui
 открывает системный диалог выбора папки, после чего скачивание идёт с
 прогресс-барами по каждому файлу — аналогично консольной версии.
 
+<p align="center">
+  <img src="screenshots/img.png" width="49%" alt="Поиск аниме" />
+  <img src="screenshots/img_1.png" width="49%" alt="Выбор озвучки и серий" />
+</p>
+<p align="center">
+  <img src="screenshots/img_2.png" width="49%" alt="Выбор папки для скачивания" />
+  <img src="screenshots/img_3.png" width="49%" alt="Прогресс скачивания" />
+</p>
+<p align="center">
+  <img src="screenshots/img_4.png" width="49%" alt="Готово — открыть файл или показать в папке" />
+</p>
+
 ### Аргументы командной строки
 
 | Флаг              | Описание                                                            |
