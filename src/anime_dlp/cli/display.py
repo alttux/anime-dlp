@@ -3,14 +3,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-console = Console()
+from anime_dlp.labels import TYPE_MAP
 
-TYPE_MAP = {
-    "anime": "Фильм",
-    "anime-serial": "Сериал",
-    "foreign-movie": "Фильм",
-    "foreign-serial": "Сериал",
-}
+console = Console()
 
 
 def print_banner():

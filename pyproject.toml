@@ -30,6 +30,9 @@ dependencies = [
     "rich>=15.0.0",
 ]
 
+[project.optional-dependencies]
+gui = ["PyGObject>=3.50.0"]
+
 [project.scripts]
 anime-dlp = "anime_dlp.main:main"
 

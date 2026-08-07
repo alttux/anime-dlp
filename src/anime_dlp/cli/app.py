@@ -1,6 +1,14 @@
 import sys
 from pathlib import Path
 
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 from rich.status import Status
 
 from anime_dlp.cli.display import (
@@ -20,12 +28,26 @@ from anime_dlp.cli.prompts import (
 )
 from anime_dlp.core.anime_service import get_anime_info, get_download_link, search_anime
 from anime_dlp.core.downloader import download_episode
+from anime_dlp.filenames import sanitize_filename
 
 
-def _sanitize_filename(name: str) -> str:
-    allowed = set(" .-_()[]")
-    cleaned = "".join(c for c in name if c.isalnum() or c in allowed).strip()
-    return cleaned or "anime"
+def _download_with_progress(link: str, filepath: Path, quality: int):
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task(f"Downloading {filepath.name}", total=None)
+
+        def on_progress(downloaded: int, total: int):
+            if progress.tasks[0].total != total:
+                progress.update(task, total=total)
+            progress.update(task, completed=downloaded)
+
+        download_episode(link, filepath, quality, on_progress=on_progress)
 
 
 def run_cli(download_dir: Path):
@@ -78,7 +100,7 @@ def run_cli(download_dir: Path):
         with Status(f"[cyan]Получение ссылки на {ep_label}...", spinner="dots"):
             link, quality, _ = get_download_link(sid, ep, translation_id)
 
-        safe_title = _sanitize_filename(selected["title"])
+        safe_title = sanitize_filename(selected["title"])
         if ep == 0:
             filename = f"{safe_title}.mp4"
         else:
@@ -86,7 +108,7 @@ def run_cli(download_dir: Path):
 
         filepath = download_dir / filename
         show_info(f"Скачивание [bold]{filename}[/] ({quality}p)")
-        download_episode(link, filepath, quality)
+        _download_with_progress(link, filepath, quality)
         show_success(f"{filename} сохранён")
 
     console.print(
