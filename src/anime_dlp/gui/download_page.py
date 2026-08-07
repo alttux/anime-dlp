@@ -22,15 +22,44 @@ def _launch_file(window, path: Path):
 
 
 def _show_in_folder(window, path: Path):
-    launcher = Gtk.FileLauncher(file=Gio.File.new_for_path(str(path)))
+    # Gtk.FileLauncher.open_containing_folder() goes through the
+    # xdg-desktop-portal OpenDirectory call, which on some desktops/portal
+    # backends silently activates the file manager without ever showing a
+    # window. Calling org.freedesktop.FileManager1.ShowItems directly is
+    # what actually works across GNOME/KDE/Xfce file managers.
+    uri = Gio.File.new_for_path(str(path)).get_uri()
 
-    def on_finished(launcher, result):
+    def call_done(proxy, result, _data=None):
         try:
-            launcher.open_containing_folder_finish(result)
-        except GLib.Error as exc:
-            window.show_toast(f"Не удалось открыть папку: {exc.message}")
+            proxy.call_finish(result)
+        except GLib.Error:
+            _launch_file(window, path.parent)
 
-    launcher.open_containing_folder(window, None, on_finished)
+    def proxy_ready(_source, result, _data=None):
+        try:
+            proxy = Gio.DBusProxy.new_for_bus_finish(result)
+        except GLib.Error:
+            _launch_file(window, path.parent)
+            return
+        proxy.call(
+            "ShowItems",
+            GLib.Variant("(ass)", ([uri], "")),
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+            call_done,
+        )
+
+    Gio.DBusProxy.new_for_bus(
+        Gio.BusType.SESSION,
+        Gio.DBusProxyFlags.NONE,
+        None,
+        "org.freedesktop.FileManager1",
+        "/org/freedesktop/FileManager1",
+        "org.freedesktop.FileManager1",
+        None,
+        proxy_ready,
+    )
 
 
 class _FileRow:
