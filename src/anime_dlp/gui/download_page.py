@@ -9,6 +9,30 @@ from anime_dlp.filenames import sanitize_filename
 from anime_dlp.gui.formatting import SpeedTracker, humanize_bytes
 
 
+def _launch_file(window, path: Path):
+    launcher = Gtk.FileLauncher(file=Gio.File.new_for_path(str(path)))
+
+    def on_finished(launcher, result):
+        try:
+            launcher.launch_finish(result)
+        except GLib.Error as exc:
+            window.show_toast(f"Не удалось открыть: {exc.message}")
+
+    launcher.launch(window, None, on_finished)
+
+
+def _show_in_folder(window, path: Path):
+    launcher = Gtk.FileLauncher(file=Gio.File.new_for_path(str(path)))
+
+    def on_finished(launcher, result):
+        try:
+            launcher.open_containing_folder_finish(result)
+        except GLib.Error as exc:
+            window.show_toast(f"Не удалось открыть папку: {exc.message}")
+
+    launcher.open_containing_folder(window, None, on_finished)
+
+
 class _FileRow:
     def __init__(self, filename: str, filepath: Path, window):
         self.filepath = filepath
@@ -57,24 +81,10 @@ class _FileRow:
         self.row.add_suffix(Gtk.Image.new_from_icon_name("emblem-ok-symbolic"))
 
     def _on_open_clicked(self, button):
-        launcher = Gtk.FileLauncher(file=Gio.File.new_for_path(str(self.filepath)))
-        launcher.launch(self.window, None, self._on_open_finished)
-
-    def _on_open_finished(self, launcher, result):
-        try:
-            launcher.launch_finish(result)
-        except GLib.Error as exc:
-            self.window.show_toast(f"Не удалось открыть: {exc.message}")
+        _launch_file(self.window, self.filepath)
 
     def _on_show_in_folder_clicked(self, button):
-        launcher = Gtk.FileLauncher(file=Gio.File.new_for_path(str(self.filepath)))
-        launcher.open_containing_folder(self.window, None, self._on_show_finished)
-
-    def _on_show_finished(self, launcher, result):
-        try:
-            launcher.open_containing_folder_finish(result)
-        except GLib.Error as exc:
-            self.window.show_toast(f"Не удалось открыть папку: {exc.message}")
+        _show_in_folder(self.window, self.filepath)
 
     def set_error(self, message: str):
         self.status_label.set_label(f"Ошибка: {message}")
@@ -96,6 +106,7 @@ class DownloadPage(Adw.NavigationPage):
         self.eps_to_download = eps_to_download
         self.download_dir = download_dir
         self._rows: dict[str, _FileRow] = {}
+        self._downloaded_paths: list[Path] = []
 
         toolbar_view = Adw.ToolbarView()
         toolbar_view.add_top_bar(Adw.HeaderBar())
@@ -147,7 +158,7 @@ class DownloadPage(Adw.NavigationPage):
                         GLib.idle_add(self._on_file_progress, filename, downloaded, total_bytes)
 
                     download_episode(link, filepath, quality, on_progress=on_progress)
-                    GLib.idle_add(self._on_file_done, filename)
+                    GLib.idle_add(self._on_file_done, filename, filepath)
                 except Exception as exc:
                     if filename not in self._rows:
                         filepath = self.download_dir / filename
@@ -170,10 +181,11 @@ class DownloadPage(Adw.NavigationPage):
             row.set_progress(downloaded, total)
         return GLib.SOURCE_REMOVE
 
-    def _on_file_done(self, filename: str):
+    def _on_file_done(self, filename: str, filepath: Path):
         row = self._rows.get(filename)
         if row:
             row.set_done()
+        self._downloaded_paths.append(filepath)
         return GLib.SOURCE_REMOVE
 
     def _on_file_error(self, filename: str, message: str):
@@ -186,5 +198,32 @@ class DownloadPage(Adw.NavigationPage):
     def _on_all_done(self):
         self.summary_label.set_label(f"Готово! Файлы сохранены в {self.download_dir}")
         self.done_status_page.set_description(str(self.download_dir))
+
+        button_box = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=12,
+            halign=Gtk.Align.CENTER,
+        )
+
+        if len(self._downloaded_paths) == 1:
+            filepath = self._downloaded_paths[0]
+
+            open_button = Gtk.Button(label="Открыть", css_classes=["suggested-action"])
+            open_button.connect("clicked", lambda b: _launch_file(self.window, filepath))
+            button_box.append(open_button)
+
+            show_button = Gtk.Button(label="Показать в папке")
+            show_button.connect("clicked", lambda b: _show_in_folder(self.window, filepath))
+            button_box.append(show_button)
+        elif self._downloaded_paths:
+            open_folder_button = Gtk.Button(
+                label="Открыть папку", css_classes=["suggested-action"]
+            )
+            open_folder_button.connect(
+                "clicked", lambda b: _launch_file(self.window, self.download_dir)
+            )
+            button_box.append(open_folder_button)
+
+        self.done_status_page.set_child(button_box)
         self.stack.set_visible_child_name("done")
         return GLib.SOURCE_REMOVE
