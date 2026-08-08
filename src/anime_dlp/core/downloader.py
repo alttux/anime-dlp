@@ -1,3 +1,6 @@
+import re
+import shutil
+import subprocess
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -8,6 +11,9 @@ import requests
 from anime_dlp.config import HEADERS, NUM_THREADS
 
 ProgressCallback = Callable[[int, int], None]
+
+_EXTINF_RE = re.compile(r"#EXTINF:([\d.]+),")
+_OUT_TIME_MS_RE = re.compile(r"out_time_ms=(\d+)")
 
 
 def _supports_ranges(url: str, total: int) -> bool:
@@ -69,6 +75,64 @@ def _download_single(
                 on_progress(downloaded, total)
 
 
+def _playlist_duration_ms(playlist_text: str) -> int:
+    return int(sum(float(m) for m in _EXTINF_RE.findall(playlist_text)) * 1000)
+
+
+def _download_via_hls(
+    m3u8_url: str, filepath: Path, on_progress: ProgressCallback | None
+):
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError(
+            "Для скачивания этой серии требуется ffmpeg (видео доступно только "
+            "в формате HLS). Установите ffmpeg и повторите попытку."
+        )
+
+    playlist_response = requests.get(m3u8_url, headers=HEADERS)
+    playlist_response.raise_for_status()
+    total_ms = _playlist_duration_ms(playlist_response.text)
+
+    if on_progress:
+        on_progress(0, total_ms)
+
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+
+    header_lines = f"Referer: {HEADERS['Referer']}\r\nUser-Agent: {HEADERS['User-Agent']}\r\n"
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-headers",
+        header_lines,
+        "-i",
+        m3u8_url,
+        "-c",
+        "copy",
+        "-bsf:a",
+        "aac_adtstoasc",
+        "-progress",
+        "pipe:1",
+        "-loglevel",
+        "error",
+        str(filepath),
+    ]
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+
+    for line in process.stdout:
+        match = _OUT_TIME_MS_RE.match(line)
+        if match and on_progress:
+            on_progress(min(int(match.group(1)) // 1000, total_ms), total_ms)
+
+    stderr = process.stderr.read()
+    process.wait()
+    if process.returncode != 0:
+        raise RuntimeError(f"Ошибка ffmpeg при скачивании HLS-потока: {stderr}")
+
+    if on_progress and total_ms:
+        on_progress(total_ms, total_ms)
+
+
 def download_episode(
     url: str,
     filepath: Path,
@@ -78,7 +142,12 @@ def download_episode(
     full_url = f"https:{url}{quality}.mp4"
 
     head_response = requests.get(full_url, headers=HEADERS, stream=True)
-    head_response.raise_for_status()
+    if head_response.status_code >= 400:
+        head_response.close()
+        hls_url = f"https:{url}{quality}.mp4:hls:manifest.m3u8"
+        _download_via_hls(hls_url, filepath, on_progress)
+        return
+
     total = int(head_response.headers.get("content-length", 0))
     head_response.close()
 
