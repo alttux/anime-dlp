@@ -25,7 +25,7 @@ echo "==> Проверка remote flathub"
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 echo "==> Проверка рантайма и SDK"
-flatpak install --user --noninteractive --skip-if-installed flathub \
+flatpak install --user --noninteractive flathub \
     org.gnome.Platform//49 org.gnome.Sdk//49
 
 echo "==> Сборка и установка пакета"
