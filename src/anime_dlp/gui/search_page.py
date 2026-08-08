@@ -2,6 +2,7 @@ import threading
 
 from gi.repository import Adw, GLib, Gtk
 
+from anime_dlp.core import network
 from anime_dlp.core.anime_service import search_anime
 from anime_dlp.labels import TYPE_MAP
 
@@ -15,7 +16,14 @@ class SearchPage(Adw.NavigationPage):
         self._debounce_id = None
 
         toolbar_view = Adw.ToolbarView()
-        toolbar_view.add_top_bar(Adw.HeaderBar())
+        header = Adw.HeaderBar()
+        self.interface_button = Gtk.MenuButton(
+            icon_name="network-wired-symbolic",
+            tooltip_text=self._interface_tooltip(),
+        )
+        self._build_interface_popover()
+        header.pack_end(self.interface_button)
+        toolbar_view.add_top_bar(header)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         box.set_margin_top(12)
@@ -127,3 +135,38 @@ class SearchPage(Adw.NavigationPage):
         from anime_dlp.gui.details_page import DetailsPage
 
         self.window.push_page(DetailsPage(window=self.window, item=item))
+
+    def _interface_tooltip(self) -> str:
+        current = network.get_current_interface()
+        return f"Интерфейс: {current}" if current else "Сетевой интерфейс: системный"
+
+    def _build_interface_popover(self):
+        popover = Gtk.Popover()
+        listbox = Gtk.ListBox(css_classes=["boxed-list"])
+        listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+
+        current = network.get_current_interface()
+
+        default_row = Adw.ActionRow(
+            title="Системный (по умолчанию)", activatable=True
+        )
+        if current is None:
+            default_row.add_suffix(Gtk.Image.new_from_icon_name("object-select-symbolic"))
+        default_row.connect("activated", self._on_interface_selected, None, popover)
+        listbox.append(default_row)
+
+        for name in network.list_interfaces():
+            row = Adw.ActionRow(title=name, activatable=True)
+            if name == current:
+                row.add_suffix(Gtk.Image.new_from_icon_name("object-select-symbolic"))
+            row.connect("activated", self._on_interface_selected, name, popover)
+            listbox.append(row)
+
+        popover.set_child(listbox)
+        self.interface_button.set_popover(popover)
+
+    def _on_interface_selected(self, row, interface: str | None, popover):
+        network.bind_to_interface(interface)
+        popover.popdown()
+        self.interface_button.set_tooltip_text(self._interface_tooltip())
+        self._build_interface_popover()
