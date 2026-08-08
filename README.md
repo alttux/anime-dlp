@@ -84,6 +84,13 @@ flatpak-builder --force-clean --user --install --repo=repo build-dir io.github.a
 flatpak build-bundle repo ../anime-dlp.flatpak io.github.alttux.AnimeDlp
 ```
 
+Все шаги выше объединены в `flatpak/build.sh` — скрипт сам проверит remote и
+рантайм, соберёт пакет и положит готовый `anime-dlp.flatpak` в корень проекта:
+
+```bash
+./flatpak/build.sh
+```
+
 > Зависимости Python зафиксированы (с хешами) в `flatpak/python3-deps.json`,
 > потому что во время сборки Flatpak нет доступа в сеть. Если вы поменяли
 > `requirements.txt`, пересоздайте этот файл:
@@ -140,6 +147,12 @@ python3 -m build
 ```bash
 pip install dist/anime_dlp-*.whl
 ```
+
+Либо через `./build.sh` — он делает то же самое, но перед сборкой
+автоматически увеличивает patch-версию в `pyproject.toml` на 1 (см.
+`scripts/bump_version.py`), чтобы у каждой новой сборки была своя версия.
+Тот же скрипт версии дергает и `flatpak/build.sh`, так что версия одна общая
+для wheel/sdist и для Flatpak-пакета.
 
 ---
 
