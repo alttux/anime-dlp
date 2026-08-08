@@ -13,6 +13,7 @@ class AnimeInfo:
     votes: int | None
     episodes_total: int | None
     episodes_aired: int | None
+    poster_url: str | None
 
 
 def _first_text(material: dict, *keys: str) -> str | None:
@@ -63,6 +64,8 @@ def extract_anime_info(item: dict) -> AnimeInfo:
     episodes_total = _to_int(material.get("episodes_total"))
     episodes_aired = _to_int(material.get("episodes_aired"))
 
+    poster_url = _first_text(material, "anime_poster_url", "poster_url")
+
     return AnimeInfo(
         description=description,
         genres=genres,
@@ -72,6 +75,7 @@ def extract_anime_info(item: dict) -> AnimeInfo:
         votes=votes,
         episodes_total=episodes_total,
         episodes_aired=episodes_aired,
+        poster_url=poster_url,
     )
 
 

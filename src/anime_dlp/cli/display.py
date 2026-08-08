@@ -74,6 +74,8 @@ def show_anime_info(item: dict):
     body = "  ·  ".join(facts)
     if info.description:
         body = f"{body}\n\n{info.description}" if body else info.description
+    if info.poster_url:
+        body = f"{body}\n\nПостер: {info.poster_url}" if body else f"Постер: {info.poster_url}"
 
     panel = Panel(
         body,

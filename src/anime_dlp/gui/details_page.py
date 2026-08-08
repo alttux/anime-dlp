@@ -1,6 +1,7 @@
 import threading
 
-from gi.repository import Adw, GLib, Gtk
+import requests
+from gi.repository import Adw, Gdk, GLib, Gtk
 
 from anime_dlp.core.anime_info import extract_anime_info, has_any_info
 from anime_dlp.core.anime_service import get_anime_info
@@ -28,7 +29,16 @@ class DetailsPage(Adw.NavigationPage):
         self.form_box.set_margin_bottom(18)
         self.form_box.set_margin_start(18)
         self.form_box.set_margin_end(18)
+
         self.stack.add_named(self.form_box, "form")
+
+        self.poster_picture = Gtk.Picture(
+            content_fit=Gtk.ContentFit.CONTAIN,
+            can_shrink=True,
+            halign=Gtk.Align.CENTER,
+        )
+        self.poster_picture.set_size_request(-1, 320)
+        self.poster_picture.set_visible(False)
 
         self.stack.set_visible_child_name("loading")
 
@@ -48,6 +58,30 @@ class DetailsPage(Adw.NavigationPage):
         self.set_child(toolbar_view)
 
         threading.Thread(target=self._fetch_info_worker, daemon=True).start()
+
+        poster_url = extract_anime_info(self.item).poster_url
+        if poster_url:
+            threading.Thread(
+                target=self._fetch_poster_worker, args=(poster_url,), daemon=True
+            ).start()
+
+    def _fetch_poster_worker(self, poster_url: str):
+        try:
+            response = requests.get(poster_url, timeout=10)
+            response.raise_for_status()
+            data = response.content
+        except requests.RequestException:
+            return
+        GLib.idle_add(self._on_poster_loaded, data)
+
+    def _on_poster_loaded(self, data: bytes):
+        try:
+            texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(data))
+        except GLib.Error:
+            return GLib.SOURCE_REMOVE
+        self.poster_picture.set_paintable(texture)
+        self.poster_picture.set_visible(True)
+        return GLib.SOURCE_REMOVE
 
     def _fetch_info_worker(self):
         try:
@@ -71,6 +105,8 @@ class DetailsPage(Adw.NavigationPage):
         return GLib.SOURCE_REMOVE
 
     def _build_form(self):
+        self.form_box.append(self.poster_picture)
+
         info_group = self._build_info_group()
         if info_group is not None:
             self.form_box.append(info_group)
