@@ -1,8 +1,8 @@
-from anime_dlp.config import BASE_DIR, TOKEN_FILE
+from anime_dlp.config import DATA_DIR, TOKEN_FILE
 
 
 def _get_token_path():
-    return BASE_DIR / TOKEN_FILE
+    return DATA_DIR / TOKEN_FILE
 
 
 def load_token() -> str | None:
@@ -14,4 +14,6 @@ def load_token() -> str | None:
 
 
 def save_token(token: str):
-    _get_token_path().write_text(token)
+    path = _get_token_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(token)

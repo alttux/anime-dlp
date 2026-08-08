@@ -170,3 +170,10 @@ cython_debug/
 src/anime_dlp.egg-info
 dist/
 src/anime_dlp.egg-info/
+
+# Flatpak
+flatpak/.flatpak-builder/
+flatpak/build-dir/
+flatpak/repo/
+flatpak/flatpak-pip-generator.py
+*.flatpak

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=anime-dlp
+GenericName=Anime Downloader
+GenericName[ru]=Загрузчик аниме
+Comment=Download anime from the Kodik player
+Comment[ru]=Скачивание аниме с плеера Kodik
+Exec=anime-dlp --gui
+Icon=io.github.alttux.AnimeDlp
+Terminal=false
+Categories=AudioVideo;Video;
+Keywords=anime;video;download;kodik;
+Keywords[ru]=аниме;видео;скачать;кодик;
+StartupNotify=true

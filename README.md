@@ -19,6 +19,7 @@
 
 - [Возможности](#-возможности)
 - [Установка](#-установка)
+  - [Flatpak](#flatpak)
   - [Из исходников](#из-исходников)
   - [Сборка пакета](#сборка-пакета)
 - [Использование](#-использование)
@@ -43,6 +44,61 @@
 ---
 
 ## 🚀 Установка
+
+### Flatpak
+
+Самый простой способ — Flatpak: Python, GTK4, libadwaita и **ffmpeg** уже
+входят в пакет, ставить их отдельно не нужно.
+
+**Установка готового пакета** (если вам передали файл `anime-dlp.flatpak`):
+
+```bash
+flatpak install --user anime-dlp.flatpak
+```
+
+Запуск — через меню приложений или командой:
+
+```bash
+flatpak run io.github.alttux.AnimeDlp                       # графический интерфейс
+flatpak run --command=anime-dlp io.github.alttux.AnimeDlp   # интерфейс командной строки
+```
+
+**Сборка Flatpak из исходников.** Понадобятся `flatpak` и `flatpak-builder`,
+а также рантайм и SDK GNOME:
+
+```bash
+flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install --user flathub org.gnome.Platform//49 org.gnome.Sdk//49
+```
+
+Сборка и установка:
+
+```bash
+cd flatpak
+flatpak-builder --force-clean --user --install --repo=repo build-dir io.github.alttux.AnimeDlp.yml
+```
+
+Чтобы получить один файл `.flatpak` и передать его другому человеку:
+
+```bash
+flatpak build-bundle repo ../anime-dlp.flatpak io.github.alttux.AnimeDlp
+```
+
+> Зависимости Python зафиксированы (с хешами) в `flatpak/python3-deps.json`,
+> потому что во время сборки Flatpak нет доступа в сеть. Если вы поменяли
+> `requirements.txt`, пересоздайте этот файл:
+> ```bash
+> cd flatpak
+> curl -sSLO https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/pip/flatpak-pip-generator.py
+> pip install "requirements-parser>=0.11.0,<1.0.0" "packaging>=23.0"
+> python flatpak-pip-generator.py --runtime='org.gnome.Sdk//49' \
+>     --requirements-file=../requirements.txt --output python3-deps
+> ```
+> Флаг `--runtime` заставляет резолвить пакеты внутри SDK, чтобы версии
+> совпадали с Python в рантайме.
+
+В Flatpak файлы по умолчанию скачиваются в `~/Downloads`, а токен Kodik
+хранится в `~/.var/app/io.github.alttux.AnimeDlp/data/`.
 
 ### Из исходников
 

@@ -1,0 +1,45 @@
+app-id: io.github.alttux.AnimeDlp
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: anime-dlp
+
+finish-args:
+  # Сеть нужна и для Kodik, и для ffmpeg; заодно даёт доступ к списку
+  # сетевых интерфейсов для флага -i/--interface.
+  - --share=network
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Папка загрузок по умолчанию (~/Downloads) и типичная папка для видео.
+  - --filesystem=xdg-download
+  - --filesystem=xdg-videos
+  # Кнопка «Показать в папке» намеренно зовёт FileManager1 напрямую,
+  # в обход портала (см. gui/download_page.py).
+  - --talk-name=org.freedesktop.FileManager1
+
+modules:
+  - python3-deps.json
+
+  - name: anime-dlp
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-deps --no-build-isolation --prefix=${FLATPAK_DEST} .
+      - install -Dm644 data/io.github.alttux.AnimeDlp.desktop
+        ${FLATPAK_DEST}/share/applications/io.github.alttux.AnimeDlp.desktop
+      - install -Dm644 data/io.github.alttux.AnimeDlp.metainfo.xml
+        ${FLATPAK_DEST}/share/metainfo/io.github.alttux.AnimeDlp.metainfo.xml
+      - install -Dm644 data/icons/io.github.alttux.AnimeDlp.svg
+        ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/io.github.alttux.AnimeDlp.svg
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - .git
+          - .venv
+          - build
+          - dist
+          - flatpak/.flatpak-builder
+          - flatpak/build-dir
+          - screenshots

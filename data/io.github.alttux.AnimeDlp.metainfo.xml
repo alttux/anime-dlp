@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.alttux.AnimeDlp</id>
+
+  <name>anime-dlp</name>
+  <summary>Download anime from the Kodik player</summary>
+  <summary xml:lang="ru">Скачивание аниме с плеера Kodik</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <developer id="io.github.alttux">
+    <name>alttux</name>
+  </developer>
+
+  <description>
+    <p>
+      anime-dlp searches for anime through the Kodik player, lets you pick a
+      voice-over track and either a single episode or a whole season, and
+      downloads it to your computer.
+    </p>
+    <p xml:lang="ru">
+      anime-dlp ищет аниме через плеер Kodik, позволяет выбрать озвучку и
+      скачать либо одну серию, либо весь сезон.
+    </p>
+    <p>Features:</p>
+    <p xml:lang="ru">Возможности:</p>
+    <ul>
+      <li>Search with live suggestions</li>
+      <li xml:lang="ru">Поиск с подсказками по мере ввода</li>
+      <li>Poster, description, rating, genres and studio for each title</li>
+      <li xml:lang="ru">Постер, описание, рейтинг, жанры и студия для каждого тайтла</li>
+      <li>Choice of voice-over track and of a single episode or the whole season</li>
+      <li xml:lang="ru">Выбор озвучки и одной серии или всего сезона</li>
+      <li>Multi-threaded downloading with progress, plus an HLS fallback</li>
+      <li xml:lang="ru">Многопоточное скачивание с прогрессом и запасной путь через HLS</li>
+      <li>A command line interface in addition to the graphical one</li>
+      <li xml:lang="ru">Интерфейс командной строки в дополнение к графическому</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.alttux.AnimeDlp.desktop</launchable>
+
+  <url type="homepage">https://github.com/alttux/anime-dlp</url>
+  <url type="bugtracker">https://github.com/alttux/anime-dlp/issues</url>
+
+  <provides>
+    <binary>anime-dlp</binary>
+  </provides>
+
+  <categories>
+    <category>AudioVideo</category>
+    <category>Video</category>
+  </categories>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="1.0.0" date="2026-08-08">
+      <description>
+        <p>First packaged release.</p>
+        <p xml:lang="ru">Первый упакованный выпуск.</p>
+      </description>
+    </release>
+  </releases>
+</component>
