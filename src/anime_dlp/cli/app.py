@@ -14,6 +14,7 @@ from rich.status import Status
 from anime_dlp.cli.display import (
     console,
     print_banner,
+    show_anime_info,
     show_anime_table,
     show_error,
     show_info,
@@ -70,6 +71,8 @@ def run_cli(download_dir: Path):
     if not sid:
         show_error("У этого аниме нет shikimori_id, скачивание невозможно")
         sys.exit(1)
+
+    show_anime_info(selected)
 
     with Status("[bold cyan]Получение информации об озвучках...", spinner="dots"):
         info = get_anime_info(sid)

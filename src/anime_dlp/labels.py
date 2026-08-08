@@ -4,3 +4,9 @@ TYPE_MAP = {
     "foreign-movie": "Фильм",
     "foreign-serial": "Сериал",
 }
+
+STATUS_MAP = {
+    "released": "Вышло",
+    "ongoing": "Онгоинг",
+    "anons": "Анонс",
+}

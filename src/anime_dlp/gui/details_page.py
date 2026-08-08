@@ -2,6 +2,7 @@ import threading
 
 from gi.repository import Adw, GLib, Gtk
 
+from anime_dlp.core.anime_info import extract_anime_info, has_any_info
 from anime_dlp.core.anime_service import get_anime_info
 
 
@@ -70,6 +71,10 @@ class DetailsPage(Adw.NavigationPage):
         return GLib.SOURCE_REMOVE
 
     def _build_form(self):
+        info_group = self._build_info_group()
+        if info_group is not None:
+            self.form_box.append(info_group)
+
         translation_group = Adw.PreferencesGroup(title="Озвучка")
         self.translation_combo = Adw.ComboRow(title="Вариант озвучки")
         model = Gtk.StringList()
@@ -111,6 +116,54 @@ class DetailsPage(Adw.NavigationPage):
             episodes_group.add(all_row)
 
         self.form_box.append(episodes_group)
+
+    def _build_info_group(self) -> Adw.PreferencesGroup | None:
+        info = extract_anime_info(self.item)
+        if not has_any_info(info):
+            return None
+
+        group = Adw.PreferencesGroup(title="Об аниме")
+
+        if info.status:
+            group.add(Adw.ActionRow(title="Статус", subtitle=info.status))
+
+        if info.episodes_total:
+            if info.episodes_aired and info.episodes_aired != info.episodes_total:
+                episodes = f"{info.episodes_aired}/{info.episodes_total}"
+            else:
+                episodes = str(info.episodes_total)
+            group.add(Adw.ActionRow(title="Эпизоды", subtitle=episodes))
+        elif info.episodes_aired:
+            group.add(Adw.ActionRow(title="Эпизоды", subtitle=str(info.episodes_aired)))
+
+        if info.score:
+            rating = str(info.score)
+            if info.votes:
+                rating += f" ({info.votes} голосов)"
+            group.add(Adw.ActionRow(title="Рейтинг", subtitle=rating))
+
+        if info.genres:
+            group.add(Adw.ActionRow(title="Жанры", subtitle=", ".join(info.genres)))
+
+        if info.studios:
+            group.add(Adw.ActionRow(title="Студия", subtitle=", ".join(info.studios)))
+
+        if info.description:
+            expander = Adw.ExpanderRow(title="Описание")
+            expander.set_expanded(False)
+            label = Gtk.Label(
+                label=info.description,
+                wrap=True,
+                xalign=0,
+                margin_top=6,
+                margin_bottom=6,
+                margin_start=12,
+                margin_end=12,
+            )
+            expander.add_row(label)
+            group.add(expander)
+
+        return group
 
     def _on_episode_mode_toggled(self, button):
         if hasattr(self, "episode_spin"):

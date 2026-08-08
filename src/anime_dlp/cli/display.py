@@ -3,6 +3,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from anime_dlp.core.anime_info import extract_anime_info, has_any_info
 from anime_dlp.labels import TYPE_MAP
 
 console = Console()
@@ -43,6 +44,45 @@ def show_anime_table(items: list[dict]):
         )
 
     console.print(table)
+
+
+def show_anime_info(item: dict):
+    info = extract_anime_info(item)
+    if not has_any_info(info):
+        return
+
+    facts = []
+    if info.status:
+        facts.append(f"Статус: {info.status}")
+    if info.episodes_total:
+        if info.episodes_aired and info.episodes_aired != info.episodes_total:
+            facts.append(f"Эпизоды: {info.episodes_aired}/{info.episodes_total}")
+        else:
+            facts.append(f"Эпизоды: {info.episodes_total}")
+    elif info.episodes_aired:
+        facts.append(f"Эпизоды: {info.episodes_aired}")
+    if info.score:
+        rating = f"Рейтинг: {info.score}"
+        if info.votes:
+            rating += f" ({info.votes} голосов)"
+        facts.append(rating)
+    if info.genres:
+        facts.append(f"Жанры: {', '.join(info.genres)}")
+    if info.studios:
+        facts.append(f"Студия: {', '.join(info.studios)}")
+
+    body = "  ·  ".join(facts)
+    if info.description:
+        body = f"{body}\n\n{info.description}" if body else info.description
+
+    panel = Panel(
+        body,
+        title=f"[bold cyan]{item.get('title', '')}[/]",
+        border_style="cyan",
+        box=box.ROUNDED,
+        padding=(1, 2),
+    )
+    console.print(panel)
 
 
 def show_translations_table(translations: list[dict], series_count: int):
