@@ -130,17 +130,27 @@ class DetailsPage(Adw.NavigationPage):
             episodes_group.add(row)
         else:
             self.all_episodes_check = Gtk.CheckButton(label="Все серии")
+            self.range_episode_check = Gtk.CheckButton(label="Диапазон серий")
             self.single_episode_check = Gtk.CheckButton(label="Одна серия")
+            self.range_episode_check.set_group(self.all_episodes_check)
             self.single_episode_check.set_group(self.all_episodes_check)
             self.single_episode_check.set_active(True)
 
             self.episode_spin = Adw.SpinRow.new_with_range(1, self.series_count, 1)
             self.episode_spin.set_title("Номер серии")
 
-            self.single_episode_check.connect(
-                "toggled", self._on_episode_mode_toggled
-            )
-            self.all_episodes_check.connect("toggled", self._on_episode_mode_toggled)
+            self.range_from_spin = Adw.SpinRow.new_with_range(1, self.series_count, 1)
+            self.range_from_spin.set_title("Серия от")
+            self.range_to_spin = Adw.SpinRow.new_with_range(1, self.series_count, 1)
+            self.range_to_spin.set_title("Серия до")
+            self.range_to_spin.set_value(self.series_count)
+
+            for check in (
+                self.single_episode_check,
+                self.range_episode_check,
+                self.all_episodes_check,
+            ):
+                check.connect("toggled", self._on_episode_mode_toggled)
 
             single_row = Adw.ActionRow(title="Одна серия")
             single_row.add_prefix(self.single_episode_check)
@@ -148,10 +158,19 @@ class DetailsPage(Adw.NavigationPage):
             episodes_group.add(single_row)
             episodes_group.add(self.episode_spin)
 
+            range_row = Adw.ActionRow(title="Диапазон серий")
+            range_row.add_prefix(self.range_episode_check)
+            range_row.set_activatable_widget(self.range_episode_check)
+            episodes_group.add(range_row)
+            episodes_group.add(self.range_from_spin)
+            episodes_group.add(self.range_to_spin)
+
             all_row = Adw.ActionRow(title="Все серии")
             all_row.add_prefix(self.all_episodes_check)
             all_row.set_activatable_widget(self.all_episodes_check)
             episodes_group.add(all_row)
+
+            self._on_episode_mode_toggled(None)
 
         self.form_box.append(episodes_group)
 
@@ -206,6 +225,10 @@ class DetailsPage(Adw.NavigationPage):
     def _on_episode_mode_toggled(self, button):
         if hasattr(self, "episode_spin"):
             self.episode_spin.set_sensitive(self.single_episode_check.get_active())
+        if hasattr(self, "range_from_spin"):
+            is_range = self.range_episode_check.get_active()
+            self.range_from_spin.set_sensitive(is_range)
+            self.range_to_spin.set_sensitive(is_range)
 
     def _on_download_clicked(self, button):
         selected = self.translation_combo.get_selected()
@@ -218,6 +241,13 @@ class DetailsPage(Adw.NavigationPage):
             eps_to_download = [0]
         elif self.all_episodes_check.get_active():
             eps_to_download = list(range(1, self.series_count + 1))
+        elif self.range_episode_check.get_active():
+            start = int(self.range_from_spin.get_value())
+            end = int(self.range_to_spin.get_value())
+            if start > end:
+                self.window.show_toast("«Серия от» не может быть больше «Серия до»")
+                return
+            eps_to_download = list(range(start, end + 1))
         else:
             eps_to_download = [int(self.episode_spin.get_value())]
 
