@@ -156,12 +156,16 @@ class DownloadPage(Adw.NavigationPage):
         self.files_group = Adw.PreferencesGroup()
         content_box.append(self.files_group)
 
-        self.stack.add_named(content_box, "progress")
+        progress_scrolled = Gtk.ScrolledWindow(vexpand=True)
+        progress_scrolled.set_child(content_box)
+        self.stack.add_named(progress_scrolled, "progress")
 
         self.done_status_page = Adw.StatusPage(
             icon_name="emblem-ok-symbolic", title="Готово!"
         )
-        self.stack.add_named(self.done_status_page, "done")
+        done_scrolled = Gtk.ScrolledWindow(vexpand=True)
+        done_scrolled.set_child(self.done_status_page)
+        self.stack.add_named(done_scrolled, "done")
 
         self.stack.set_visible_child_name("progress")
 

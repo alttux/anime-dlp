@@ -30,7 +30,9 @@ class DetailsPage(Adw.NavigationPage):
         self.form_box.set_margin_start(18)
         self.form_box.set_margin_end(18)
 
-        self.stack.add_named(self.form_box, "form")
+        form_scrolled = Gtk.ScrolledWindow(vexpand=True)
+        form_scrolled.set_child(self.form_box)
+        self.stack.add_named(form_scrolled, "form")
 
         self.poster_picture = Gtk.Picture(
             content_fit=Gtk.ContentFit.CONTAIN,
