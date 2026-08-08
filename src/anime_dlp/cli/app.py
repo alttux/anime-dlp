@@ -94,6 +94,9 @@ def run_cli(download_dir: Path):
         answer = ask_episode(series_count)
         if answer == "all":
             eps_to_download = list(range(1, series_count + 1))
+        elif isinstance(answer, tuple):
+            start, end = answer
+            eps_to_download = list(range(start, end + 1))
         else:
             eps_to_download = [answer]
 
