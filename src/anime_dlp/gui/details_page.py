@@ -37,9 +37,10 @@ class DetailsPage(Adw.NavigationPage):
         self.poster_picture = Gtk.Picture(
             content_fit=Gtk.ContentFit.CONTAIN,
             can_shrink=True,
-            halign=Gtk.Align.CENTER,
+            halign=Gtk.Align.START,
+            valign=Gtk.Align.START,
         )
-        self.poster_picture.set_size_request(-1, 320)
+        self.poster_picture.set_size_request(200, 280)
         self.poster_picture.set_visible(False)
 
         self.stack.set_visible_child_name("loading")
@@ -107,12 +108,21 @@ class DetailsPage(Adw.NavigationPage):
         return GLib.SOURCE_REMOVE
 
     def _build_form(self):
-        self.form_box.append(self.poster_picture)
+        title_label = Gtk.Label(
+            label=self.item.get("title", "Anime"),
+            wrap=True,
+            xalign=0,
+            valign=Gtk.Align.START,
+            hexpand=True,
+            css_classes=["title-1"],
+        )
+
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+        header_box.append(self.poster_picture)
+        header_box.append(title_label)
+        self.form_box.append(header_box)
 
         info_group = self._build_info_group()
-        if info_group is not None:
-            self.form_box.append(info_group)
-
         translation_group = Adw.PreferencesGroup(title="Озвучка")
         self.translation_combo = Adw.ComboRow(title="Вариант озвучки")
         model = Gtk.StringList()
@@ -120,7 +130,6 @@ class DetailsPage(Adw.NavigationPage):
             model.append(f"{t['type']} — {t['name']}")
         self.translation_combo.set_model(model)
         translation_group.add(self.translation_combo)
-        self.form_box.append(translation_group)
 
         self.is_movie = self.series_count == 0 or self.series_count is None
 
@@ -172,7 +181,29 @@ class DetailsPage(Adw.NavigationPage):
 
             self._on_episode_mode_toggled(None)
 
-        self.form_box.append(episodes_group)
+        sections_flow = Gtk.FlowBox(
+            selection_mode=Gtk.SelectionMode.NONE,
+            homogeneous=False,
+            column_spacing=18,
+            row_spacing=18,
+            max_children_per_line=3,
+            min_children_per_line=1,
+        )
+
+        if info_group is not None:
+            info_group.set_hexpand(True)
+            info_group.set_size_request(280, -1)
+            sections_flow.append(info_group)
+
+        translation_group.set_hexpand(True)
+        translation_group.set_size_request(280, -1)
+        sections_flow.append(translation_group)
+
+        episodes_group.set_hexpand(True)
+        episodes_group.set_size_request(280, -1)
+        sections_flow.append(episodes_group)
+
+        self.form_box.append(sections_flow)
 
     def _build_info_group(self) -> Adw.PreferencesGroup | None:
         info = extract_anime_info(self.item)
@@ -182,28 +213,40 @@ class DetailsPage(Adw.NavigationPage):
         group = Adw.PreferencesGroup(title="Об аниме")
 
         if info.status:
-            group.add(Adw.ActionRow(title="Статус", subtitle=info.status))
+            row = Adw.ActionRow(title="Статус")
+            row.add_suffix(Gtk.Label(label=info.status, css_classes=["heading"], wrap=True, xalign=1))
+            group.add(row)
 
         if info.episodes_total:
             if info.episodes_aired and info.episodes_aired != info.episodes_total:
                 episodes = f"{info.episodes_aired}/{info.episodes_total}"
             else:
                 episodes = str(info.episodes_total)
-            group.add(Adw.ActionRow(title="Эпизоды", subtitle=episodes))
+            row = Adw.ActionRow(title="Эпизоды")
+            row.add_suffix(Gtk.Label(label=episodes, css_classes=["heading"], wrap=True, xalign=1))
+            group.add(row)
         elif info.episodes_aired:
-            group.add(Adw.ActionRow(title="Эпизоды", subtitle=str(info.episodes_aired)))
+            row = Adw.ActionRow(title="Эпизоды")
+            row.add_suffix(Gtk.Label(label=str(info.episodes_aired), css_classes=["heading"], wrap=True, xalign=1))
+            group.add(row)
 
         if info.score:
             rating = str(info.score)
             if info.votes:
                 rating += f" ({info.votes} голосов)"
-            group.add(Adw.ActionRow(title="Рейтинг", subtitle=rating))
+            row = Adw.ActionRow(title="Рейтинг")
+            row.add_suffix(Gtk.Label(label=rating, css_classes=["heading"], wrap=True, xalign=1))
+            group.add(row)
 
         if info.genres:
-            group.add(Adw.ActionRow(title="Жанры", subtitle=", ".join(info.genres)))
+            row = Adw.ActionRow(title="Жанры")
+            row.add_suffix(Gtk.Label(label=", ".join(info.genres), css_classes=["heading"], wrap=True, xalign=1))
+            group.add(row)
 
         if info.studios:
-            group.add(Adw.ActionRow(title="Студия", subtitle=", ".join(info.studios)))
+            row = Adw.ActionRow(title="Студия")
+            row.add_suffix(Gtk.Label(label=", ".join(info.studios), css_classes=["heading"], wrap=True, xalign=1))
+            group.add(row)
 
         if info.description:
             expander = Adw.ExpanderRow(title="Описание")
