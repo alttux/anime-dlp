@@ -87,6 +87,8 @@ jobs:
             mingw-w64-x86_64-gtk4
             mingw-w64-x86_64-libadwaita
             mingw-w64-x86_64-gsettings-desktop-schemas
+            mingw-w64-x86_64-adwaita-icon-theme
+            mingw-w64-x86_64-hicolor-icon-theme
 
       - name: Install anime-dlp
         run: python -m pip install --no-build-isolation --break-system-packages ".[gui]"

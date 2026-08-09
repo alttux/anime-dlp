@@ -129,6 +129,7 @@ anime-dlp/
 ├── build.sh                       # Сборка Python-пакета (wheel/sdist) + бамп версии
 ├── pyproject.toml                 # Метаданные и зависимости пакета
 ├── requirements.txt                # Зафиксированные версии зависимостей
+├── WINDOWS.md                      # Подробная пошаговая инструкция: CLI+GUI на Windows из исходников
 └── LICENSE.txt                     # Лицензия MIT
 ```
 
