@@ -185,32 +185,42 @@ class DetailsPage(Adw.NavigationPage):
 
             self._on_episode_mode_toggled(None)
 
-        sections_box = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL, spacing=18, hexpand=True
+        sections_flow = Gtk.FlowBox(
+            selection_mode=Gtk.SelectionMode.NONE,
+            homogeneous=False,
+            column_spacing=18,
+            row_spacing=18,
+            max_children_per_line=3,
+            min_children_per_line=1,
+            hexpand=True,
+            halign=Gtk.Align.FILL,
         )
 
         if info_group is not None:
             info_group.set_hexpand(True)
-            sections_box.append(info_group)
+            info_group.set_size_request(280, -1)
+            sections_flow.append(info_group)
 
         translation_group.set_hexpand(True)
-        sections_box.append(translation_group)
+        translation_group.set_size_request(280, -1)
+        sections_flow.append(translation_group)
 
         episodes_group.set_hexpand(True)
-        sections_box.append(episodes_group)
+        episodes_group.set_size_request(280, -1)
+        sections_flow.append(episodes_group)
 
-        sections_bin = Adw.BreakpointBin()
-        sections_bin.set_size_request(0, 0)
-        sections_bin.set_hexpand(True)
-        sections_bin.set_child(sections_box)
+        self.form_box.append(sections_flow)
 
-        wide_breakpoint = Adw.Breakpoint.new(
-            Adw.BreakpointCondition.parse("min-width: 900sp")
+    @staticmethod
+    def _suffix_label(text: str) -> Gtk.Label:
+        return Gtk.Label(
+            label=text,
+            css_classes=["heading"],
+            wrap=True,
+            xalign=1,
+            justify=Gtk.Justification.RIGHT,
+            max_width_chars=20,
         )
-        wide_breakpoint.add_setter(sections_box, "orientation", Gtk.Orientation.HORIZONTAL)
-        sections_bin.add_breakpoint(wide_breakpoint)
-
-        self.form_box.append(sections_bin)
 
     def _build_info_group(self) -> Adw.PreferencesGroup | None:
         info = extract_anime_info(self.item)
@@ -221,7 +231,7 @@ class DetailsPage(Adw.NavigationPage):
 
         if info.status:
             row = Adw.ActionRow(title="Статус")
-            row.add_suffix(Gtk.Label(label=info.status, css_classes=["heading"], wrap=True, xalign=1))
+            row.add_suffix(self._suffix_label(info.status))
             group.add(row)
 
         if info.episodes_total:
@@ -230,11 +240,11 @@ class DetailsPage(Adw.NavigationPage):
             else:
                 episodes = str(info.episodes_total)
             row = Adw.ActionRow(title="Эпизоды")
-            row.add_suffix(Gtk.Label(label=episodes, css_classes=["heading"], wrap=True, xalign=1))
+            row.add_suffix(self._suffix_label(episodes))
             group.add(row)
         elif info.episodes_aired:
             row = Adw.ActionRow(title="Эпизоды")
-            row.add_suffix(Gtk.Label(label=str(info.episodes_aired), css_classes=["heading"], wrap=True, xalign=1))
+            row.add_suffix(self._suffix_label(str(info.episodes_aired)))
             group.add(row)
 
         if info.score:
@@ -242,17 +252,17 @@ class DetailsPage(Adw.NavigationPage):
             if info.votes:
                 rating += f" ({info.votes} голосов)"
             row = Adw.ActionRow(title="Рейтинг")
-            row.add_suffix(Gtk.Label(label=rating, css_classes=["heading"], wrap=True, xalign=1))
+            row.add_suffix(self._suffix_label(rating))
             group.add(row)
 
         if info.genres:
             row = Adw.ActionRow(title="Жанры")
-            row.add_suffix(Gtk.Label(label=", ".join(info.genres), css_classes=["heading"], wrap=True, xalign=1))
+            row.add_suffix(self._suffix_label(", ".join(info.genres)))
             group.add(row)
 
         if info.studios:
             row = Adw.ActionRow(title="Студия")
-            row.add_suffix(Gtk.Label(label=", ".join(info.studios), css_classes=["heading"], wrap=True, xalign=1))
+            row.add_suffix(self._suffix_label(", ".join(info.studios)))
             group.add(row)
 
         if info.description:
@@ -262,6 +272,7 @@ class DetailsPage(Adw.NavigationPage):
                 label=info.description,
                 wrap=True,
                 xalign=0,
+                max_width_chars=30,
                 margin_top=6,
                 margin_bottom=6,
                 margin_start=12,
