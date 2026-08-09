@@ -18,19 +18,21 @@ class DetailsPage(Adw.NavigationPage):
         toolbar_view = Adw.ToolbarView()
         toolbar_view.add_top_bar(Adw.HeaderBar())
 
-        self.stack = Gtk.Stack()
+        self.stack = Gtk.Stack(hexpand=True)
 
         spinner_box = Gtk.Box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
         spinner_box.append(Adw.Spinner())
         self.stack.add_named(spinner_box, "loading")
 
-        self.form_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        self.form_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=18, hexpand=True
+        )
         self.form_box.set_margin_top(18)
         self.form_box.set_margin_bottom(18)
         self.form_box.set_margin_start(18)
         self.form_box.set_margin_end(18)
 
-        form_scrolled = Gtk.ScrolledWindow(vexpand=True)
+        form_scrolled = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
         form_scrolled.set_child(self.form_box)
         self.stack.add_named(form_scrolled, "form")
 
@@ -45,7 +47,7 @@ class DetailsPage(Adw.NavigationPage):
 
         self.stack.set_visible_child_name("loading")
 
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
         content_box.append(self.stack)
         content_box.set_vexpand(True)
 
@@ -112,12 +114,14 @@ class DetailsPage(Adw.NavigationPage):
             label=self.item.get("title", "Anime"),
             wrap=True,
             xalign=0,
-            valign=Gtk.Align.START,
+            valign=Gtk.Align.CENTER,
             hexpand=True,
             css_classes=["title-1"],
         )
 
-        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+        header_box = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=18, hexpand=True
+        )
         header_box.append(self.poster_picture)
         header_box.append(title_label)
         self.form_box.append(header_box)
@@ -188,22 +192,25 @@ class DetailsPage(Adw.NavigationPage):
             row_spacing=18,
             max_children_per_line=3,
             min_children_per_line=1,
+            hexpand=True,
+            halign=Gtk.Align.FILL,
         )
 
         if info_group is not None:
-            info_group.set_hexpand(True)
-            info_group.set_size_request(280, -1)
-            sections_flow.append(info_group)
+            sections_flow.append(self._wrap_section(info_group))
 
-        translation_group.set_hexpand(True)
-        translation_group.set_size_request(280, -1)
-        sections_flow.append(translation_group)
-
-        episodes_group.set_hexpand(True)
-        episodes_group.set_size_request(280, -1)
-        sections_flow.append(episodes_group)
+        sections_flow.append(self._wrap_section(translation_group))
+        sections_flow.append(self._wrap_section(episodes_group))
 
         self.form_box.append(sections_flow)
+
+    @staticmethod
+    def _wrap_section(widget) -> Adw.Clamp:
+        clamp = Adw.Clamp(maximum_size=400, tightening_threshold=280)
+        clamp.set_child(widget)
+        clamp.set_hexpand(True)
+        clamp.set_size_request(280, -1)
+        return clamp
 
     def _build_info_group(self) -> Adw.PreferencesGroup | None:
         info = extract_anime_info(self.item)
