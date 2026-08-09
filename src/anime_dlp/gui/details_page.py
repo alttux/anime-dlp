@@ -185,32 +185,32 @@ class DetailsPage(Adw.NavigationPage):
 
             self._on_episode_mode_toggled(None)
 
-        sections_flow = Gtk.FlowBox(
-            selection_mode=Gtk.SelectionMode.NONE,
-            homogeneous=False,
-            column_spacing=18,
-            row_spacing=18,
-            max_children_per_line=3,
-            min_children_per_line=1,
-            hexpand=True,
-            halign=Gtk.Align.FILL,
+        sections_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=18, hexpand=True
         )
 
         if info_group is not None:
-            sections_flow.append(self._wrap_section(info_group))
+            info_group.set_hexpand(True)
+            sections_box.append(info_group)
 
-        sections_flow.append(self._wrap_section(translation_group))
-        sections_flow.append(self._wrap_section(episodes_group))
+        translation_group.set_hexpand(True)
+        sections_box.append(translation_group)
 
-        self.form_box.append(sections_flow)
+        episodes_group.set_hexpand(True)
+        sections_box.append(episodes_group)
 
-    @staticmethod
-    def _wrap_section(widget) -> Adw.Clamp:
-        clamp = Adw.Clamp(maximum_size=400, tightening_threshold=280)
-        clamp.set_child(widget)
-        clamp.set_hexpand(True)
-        clamp.set_size_request(280, -1)
-        return clamp
+        sections_bin = Adw.BreakpointBin()
+        sections_bin.set_size_request(0, 0)
+        sections_bin.set_hexpand(True)
+        sections_bin.set_child(sections_box)
+
+        wide_breakpoint = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse("min-width: 900sp")
+        )
+        wide_breakpoint.add_setter(sections_box, "orientation", Gtk.Orientation.HORIZONTAL)
+        sections_bin.add_breakpoint(wide_breakpoint)
+
+        self.form_box.append(sections_bin)
 
     def _build_info_group(self) -> Adw.PreferencesGroup | None:
         info = extract_anime_info(self.item)
