@@ -38,6 +38,12 @@ def main():
     download_dir.mkdir(parents=True, exist_ok=True)
 
     if args.interface:
+        if not network.SUPPORTED:
+            show_error(
+                "Привязка к сетевому интерфейсу (-i/--interface) поддерживается "
+                f"только в Linux (текущая платформа: {sys.platform})."
+            )
+            sys.exit(1)
         available = network.list_interfaces()
         if args.interface not in available:
             show_error(
@@ -49,7 +55,15 @@ def main():
 
     def _run():
         if args.gui:
-            from anime_dlp.gui import run_gui
+            try:
+                from anime_dlp.gui import run_gui
+            except ImportError as exc:
+                show_error(
+                    "Не удалось запустить графический интерфейс: не установлены "
+                    f"GTK4/libadwaita/PyGObject ({exc}). Установите зависимости "
+                    "GUI для вашей платформы — см. README.md."
+                )
+                sys.exit(1)
 
             run_gui(download_dir)
         else:

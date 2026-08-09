@@ -21,6 +21,7 @@
 - [Установка](#-установка)
   - [Flatpak](#flatpak)
   - [Из исходников](#из-исходников)
+  - [Windows и macOS](#windows-и-macos)
   - [Сборка пакета](#сборка-пакета)
 - [Использование](#-использование)
   - [Пример работы](#пример-работы)
@@ -133,6 +134,107 @@ pip install -r requirements.txt
 pip install ".[gui]"
 ```
 
+### Windows и macOS
+
+Flatpak — только для Linux, но CLI и GUI работают и на Windows, и на macOS.
+Каждый пуш в `main` и каждый релизный тег собираются и проверяются в CI
+(`.github/workflows/desktop-build.yml`), поэтому шаги ниже гарантированно
+рабочие.
+
+**Готовый исполняемый файл CLI** (без GUI, ничего дополнительно
+устанавливать не нужно) можно скачать во вкладке [Releases][releases] —
+`anime-dlp-windows-x86_64.exe` или `anime-dlp-macos-arm64` — либо, для
+последнего коммита в `main`, во вкладке [Actions][actions] → workflow
+"Windows & macOS build" → артефакты сборки. Файл автономный (собран
+PyInstaller'ом), Python ставить не нужно.
+
+[releases]: https://github.com/alttux/anime-dlp/releases
+[actions]: https://github.com/alttux/anime-dlp/actions/workflows/desktop-build.yml
+
+```powershell
+# Windows (PowerShell)
+.\anime-dlp-windows-x86_64.exe -d "$HOME\Videos\Anime"
+```
+
+```bash
+# macOS
+chmod +x anime-dlp-macos-arm64
+./anime-dlp-macos-arm64 -d ~/Movies/Anime
+```
+
+> Для серий, которые Kodik отдаёт только через HLS, нужен **ffmpeg** в
+> `PATH`: на Windows — `winget install ffmpeg` или скачать с
+> [ffmpeg.org](https://ffmpeg.org/download.html), на macOS —
+> `brew install ffmpeg`. Без него скачаются только серии с обычной
+> Range-раздачей.
+>
+> Токен Kodik и папка загрузок по умолчанию (если не указан `-d`) для этого
+> exe — `%APPDATA%\anime-dlp` и `~\Downloads` на Windows,
+> `~/Library/Application Support/anime-dlp` и `~/Downloads` на macOS.
+>
+> Флаг `-i/--interface` (привязка к сетевому интерфейсу) работает только в
+> Linux — на Windows/macOS программа сообщит об этом и завершится с ошибкой,
+> если флаг передан; остальной функционал не затронут.
+
+**Графический интерфейс (GUI)** собирается из исходников, так как готовых
+pip-колёс GTK4/libadwaita для Windows и macOS нет — их ставят через
+системный пакетный менеджер платформы.
+
+<details>
+<summary><b>GUI на Windows — через MSYS2</b></summary>
+
+1. Установите [MSYS2](https://www.msys2.org/) и откройте терминал
+   **MSYS2 MinGW64** (не обычный `MSYS2 MSYS`).
+2. Поставьте GTK4, libadwaita и Python-биндинги:
+   ```bash
+   pacman -Syu   # при необходимости перезапустить терминал и повторить
+   pacman -S mingw-w64-x86_64-python mingw-w64-x86_64-python-pip \
+             mingw-w64-x86_64-python-gobject mingw-w64-x86_64-gtk4 \
+             mingw-w64-x86_64-libadwaita mingw-w64-x86_64-ffmpeg
+   ```
+3. Установите anime-dlp в этот же MSYS2-Python (из исходников или, после
+   публикации на PyPI, `pip install anime-dlp[gui]`):
+   ```bash
+   git clone https://github.com/alttux/anime-dlp.git
+   cd anime-dlp
+   python -m pip install --no-build-isolation ".[gui]"
+   ```
+4. Запуск (из того же терминала MSYS2 MinGW64):
+   ```bash
+   anime-dlp --gui
+   ```
+
+Именно эти шаги проверяются в CI (джоба `gui-windows`), так что если у вас
+что-то не совпадает — сверьтесь с `.github/workflows/desktop-build.yml`.
+</details>
+
+<details>
+<summary><b>GUI на macOS — через Homebrew</b></summary>
+
+1. Поставьте [Homebrew](https://brew.sh/), затем GTK4/libadwaita/PyGObject
+   и ffmpeg:
+   ```bash
+   brew install gtk4 libadwaita pygobject3 adwaita-icon-theme \
+                gobject-introspection ffmpeg
+   ```
+2. Создайте виртуальное окружение с доступом к системным пакетам Homebrew
+   (иначе Python не увидит PyGObject, поставленный через brew) и установите
+   anime-dlp в него:
+   ```bash
+   git clone https://github.com/alttux/anime-dlp.git
+   cd anime-dlp
+   "$(brew --prefix python3)/bin/python3" -m venv --system-site-packages .venv
+   source .venv/bin/activate
+   pip install .
+   ```
+3. Запуск (в активированном `.venv`):
+   ```bash
+   anime-dlp --gui
+   ```
+
+Эти же шаги — джоба `gui-macos` в CI.
+</details>
+
 ### Сборка пакета
 
 Проект собирается стандартными средствами Python (`setuptools`):
@@ -207,6 +309,7 @@ anime-dlp --gui
 | `-d`, `--dir`     | Директория для скачивания аниме (по умолчанию — директория программы) |
 | `--logging`       | Сохранять весь вывод консоли в файл `anime-dlp.log` внутри директории загрузки |
 | `--gui`           | Запустить графический интерфейс (GTK4 + libadwaita) вместо консольного диалога |
+| `-i`, `--interface` | Сетевой интерфейс для выхода в интернет, в обход VPN/TUN (только Linux) |
 | `-h`, `--help`    | Показать справку по аргументам                                     |
 
 ### Пример работы

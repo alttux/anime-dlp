@@ -17,12 +17,13 @@ class SearchPage(Adw.NavigationPage):
 
         toolbar_view = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        self.interface_button = Gtk.MenuButton(
-            icon_name="network-wired-symbolic",
-            tooltip_text=self._interface_tooltip(),
-        )
-        self._build_interface_popover()
-        header.pack_end(self.interface_button)
+        if network.SUPPORTED:
+            self.interface_button = Gtk.MenuButton(
+                icon_name="network-wired-symbolic",
+                tooltip_text=self._interface_tooltip(),
+            )
+            self._build_interface_popover()
+            header.pack_end(self.interface_button)
         toolbar_view.add_top_bar(header)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)

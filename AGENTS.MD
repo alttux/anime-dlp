@@ -13,11 +13,15 @@ CLI **или** GTK4/libadwaita GUI при помощи библиотеки
 anime-dlp -d <ДИРЕКТОРИЯ КУДА СКАЧАЕТСЯ АНИМЕ> [--logging] [-i <ИНТЕРФЕЙС>]
 ```
 Если директория не указана — файлы скачаются в `downloads/` рядом с
-программой (вне Flatpak) либо в `~/Downloads` (внутри Flatpak).
+программой (вне Flatpak и вне PyInstaller-сборки) либо в `~/Downloads`
+(внутри Flatpak или в собранном PyInstaller-исполняемом файле для
+Windows/macOS — см. `config.py`, `IS_FROZEN`).
 Флаг `--logging` дублирует весь вывод консоли в файл `anime-dlp.log` внутри
 директории загрузки. Флаг `-i/--interface` привязывает исходящий трафик к
-конкретному сетевому интерфейсу (в обход VPN/TUN); список интерфейсов —
-`core/network.py`.
+конкретному сетевому интерфейсу (в обход VPN/TUN) через `SO_BINDTODEVICE` —
+эта сокет-опция есть только в Linux, поэтому на Windows/macOS флаг завершает
+программу с понятной ошибкой, а сам пункт меню в GUI на этих платформах не
+показывается (`core/network.py`, `network.SUPPORTED`).
 2. После запуска программа попросит название аниме (поддерживается кириллица).
 3. Программа найдёт варианты и выведет пронумерованный список (с годом, типом
    и `shikimori_id`), чтобы пользователь выбрал нужный.
@@ -114,9 +118,14 @@ anime-dlp/
 ├── flatpak/                       # Манифест и скрипт сборки Flatpak-пакета
 │   ├── io.github.alttux.AnimeDlp.yml
 │   └── build.sh                   # Сборка + бамп версии, кладёт anime-dlp.flatpak в корень
+├── packaging/
+│   └── pyinstaller_entry.py       # Точка входа для PyInstaller-сборки CLI (Windows/macOS)
 ├── scripts/
 │   └── bump_version.py            # Увеличивает patch-версию в pyproject.toml и metainfo.xml на 1
 ├── screenshots/                   # Скриншоты GUI для README
+├── .github/workflows/
+│   ├── flatpak.yml                # CI: сборка Flatpak (Linux)
+│   └── desktop-build.yml          # CI: CLI-бинарники + GUI smoke-тесты для Windows/macOS
 ├── build.sh                       # Сборка Python-пакета (wheel/sdist) + бамп версии
 ├── pyproject.toml                 # Метаданные и зависимости пакета
 ├── requirements.txt                # Зафиксированные версии зависимостей
@@ -141,5 +150,14 @@ anime-dlp/
   последним `<release>` в `data/io.github.alttux.AnimeDlp.metainfo.xml` —
   версия общая для wheel/sdist и Flatpak-пакета и растёт при каждой сборке
   любого из них.
+- Windows/macOS (GitHub Actions, `.github/workflows/desktop-build.yml`):
+  джоба `cli` собирает автономный CLI-исполняемый файл через PyInstaller
+  (`packaging/pyinstaller_entry.py`) для обеих платформ и прикрепляет его к
+  GitHub Release при пуше тега `v*.*.*`; джобы `gui-windows`/`gui-macos`
+  ставят GTK4/libadwaita/PyGObject через MSYS2 (Windows) и Homebrew (macOS)
+  и проверяют, что GUI импортируется и запускается. Flatpak — только для
+  Linux (сборка через `flatpak.yml`), готовых GTK4-пакетов для Windows/macOS
+  в pip нет — их устанавливают через системный пакетный менеджер платформы
+  (см. README → «Windows и macOS»).
 
 Подробная инструкция по установке и использованию — в `README.md`.
