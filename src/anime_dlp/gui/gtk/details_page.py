@@ -328,7 +328,7 @@ class DetailsPage(Adw.NavigationPage):
 
         download_dir = Path(gfile.get_path())
 
-        from anime_dlp.gui.download_page import DownloadPage
+        from anime_dlp.gui.gtk.download_page import DownloadPage
 
         self.window.push_page(
             DownloadPage(

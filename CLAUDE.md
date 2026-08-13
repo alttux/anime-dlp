@@ -1,6 +1,7 @@
 # Суть проекта
 Проект предназначен для скачивания аниме (например, на домашнем сервере) через
-CLI **или** GTK4/libadwaita GUI при помощи библиотеки
+CLI **или** GUI (GTK4/libadwaita на Linux/macOS, PyQt6 на Windows) при помощи
+библиотеки
 [anime-parsers-ru](https://github.com/YaNesyTortiK/AnimeParsers), используя
 плеер Kodik. Пакет называется `anime-dlp`, устанавливается как консольная
 команда `anime-dlp`, распространяется как обычный Python-пакет и как Flatpak
@@ -76,13 +77,22 @@ $ anime-dlp -d ~/Videos/Anime
 
 # Графический интерфейс (GUI)
 Вместо консольного диалога программу можно запустить с флагом `--gui` —
-откроется окно на GTK4 + libadwaita, повторяющее тот же сценарий: поиск с
-живыми подсказками → карточка с информацией об аниме, выбором озвучки и
-серий → системный диалог выбора папки загрузки → прогресс-бары по каждому
-файлу → экран «Готово» с кнопками «Открыть» и «Показать в папке».
-GUI — опциональная зависимость (`PyGObject`, устанавливается через
-`pip install ".[gui]"`), поэтому импортируется лениво (только при `--gui`),
-чтобы CLI не требовал GTK.
+откроется окно, повторяющее тот же сценарий: поиск с живыми подсказками →
+карточка с информацией об аниме, выбором озвучки и серий → системный диалог
+выбора папки загрузки → прогресс-бары по каждому файлу → экран «Готово» с
+кнопками «Открыть» и «Показать в папке».
+
+У GUI два бэкенда с идентичным набором экранов и порядком элементов:
+**GTK4 + libadwaita** (`gui/gtk/`, Linux/macOS) и **PyQt6** (`gui/qt/`,
+Windows — у GTK4/libadwaita нет pip-колёс под Windows, у PyQt6 есть).
+`gui/__init__.py` сам выбирает бэкенд по `sys.platform`
+(`ANIME_DLP_GUI_BACKEND=gtk|qt` переопределяет выбор — например, чтобы
+запустить GTK-версию на Windows через MSYS2, см. `WINDOWS.md`). GUI —
+опциональная зависимость (`pyproject.toml` → `[project.optional-dependencies].gui`
+ставит `PyGObject` на Linux/macOS и `PyQt6` на Windows через PEP 508
+environment markers, через `pip install ".[gui]"`), поэтому оба бэкенда
+импортируются лениво (только при `--gui`), чтобы CLI не требовал ни GTK, ни
+Qt.
 
 Бизнес-логика (поиск, получение ссылок, скачивание с колбэком прогресса)
 переиспользуется между CLI и GUI через `core/` — сама GUI ничего не знает
@@ -101,13 +111,23 @@ anime-dlp/
 │   │   ├── app.py                # Основной сценарий взаимодействия с пользователем
 │   │   ├── prompts.py            # Запросы ввода у пользователя
 │   │   └── display.py            # Оформление вывода (таблицы, панели, баннеры, сообщения)
-│   ├── gui/                       # Графический интерфейс (GTK4 + libadwaita, --gui)
-│   │   ├── app.py                 # Точка входа GUI, Adw.Application
-│   │   ├── window.py              # Главное окно и навигация между экранами
-│   │   ├── search_page.py         # Поиск аниме с живыми подсказками, выбор сетевого интерфейса
-│   │   ├── details_page.py        # Информация об аниме, выбор озвучки и серий, кнопка «Скачать»
-│   │   ├── download_page.py       # Экран скачивания с прогресс-барами, кнопки «Открыть»/«Показать в папке»
-│   │   └── formatting.py          # Форматирование размера/скорости для GUI
+│   ├── gui/                       # Графический интерфейс (--gui)
+│   │   ├── __init__.py            # Выбор бэкенда: PyQt6 на Windows, GTK4 на Linux/macOS (ANIME_DLP_GUI_BACKEND)
+│   │   ├── formatting.py          # Форматирование размера/скорости (общее для gtk/ и qt/)
+│   │   ├── gtk/                   # Бэкенд GTK4 + libadwaita (Linux/macOS)
+│   │   │   ├── app.py             # Точка входа GUI, Adw.Application
+│   │   │   ├── window.py          # Главное окно и навигация между экранами
+│   │   │   ├── search_page.py     # Поиск аниме с живыми подсказками, выбор сетевого интерфейса
+│   │   │   ├── details_page.py    # Информация об аниме, выбор озвучки и серий, кнопка «Скачать»
+│   │   │   └── download_page.py   # Экран скачивания с прогресс-барами, кнопки «Открыть»/«Показать в папке»
+│   │   └── qt/                    # Бэкенд PyQt6 (Windows), тот же набор экранов и порядок элементов
+│   │       ├── app.py             # Точка входа GUI, QApplication
+│   │       ├── window.py          # Главное окно, навигация (QStackedWidget) и toast-оверлей
+│   │       ├── widgets.py         # Составные виджеты (карточки/строки/flow-layout под Adwaita-стиль)
+│   │       ├── workers.py         # Фоновые QThread-воркеры (поиск/инфо/постер/скачивание)
+│   │       ├── search_page.py     # Поиск аниме с живыми подсказками (сетевой интерфейс не показывается — Linux-only)
+│   │       ├── details_page.py    # Информация об аниме, выбор озвучки и серий, кнопка «Скачать»
+│   │       └── download_page.py   # Экран скачивания с прогресс-барами, кнопки «Открыть»/«Показать в папке»
 │   └── core/                     # Основная бизнес-логика (используется и CLI, и GUI)
 │       ├── anime_service.py      # Поиск аниме и получение ссылок на скачивание
 │       ├── anime_info.py         # Извлечение описания/жанров/рейтинга/статуса из material_data
@@ -121,15 +141,19 @@ anime-dlp/
 ├── packaging/
 │   ├── pyinstaller_entry.py       # Точка входа для ручной PyInstaller-сборки CLI (любая платформа)
 │   ├── macos_gui_entry.py         # Точка входа GUI для macOS .app-бандла (PyInstaller, --windowed)
-│   └── macos/
-│       ├── make_icns.sh           # SVG-иконка проекта → AnimeDlp.icns (rsvg-convert + iconutil)
-│       └── build.sh               # Сборка dist/AnimeDlp.app через PyInstaller (GTK4/libadwaita из Homebrew)
+│   ├── windows_gui_entry.py       # Точка входа GUI (PyQt6) для Windows .exe-бандла (PyInstaller, --windowed)
+│   ├── macos/
+│   │   ├── make_icns.sh           # SVG-иконка проекта → AnimeDlp.icns (rsvg-convert + iconutil)
+│   │   └── build.sh               # Сборка dist/AnimeDlp.app через PyInstaller (GTK4/libadwaita из Homebrew)
+│   └── windows/
+│       ├── make_ico.sh            # SVG-иконка проекта → AnimeDlp.ico (rsvg-convert + Pillow)
+│       └── AnimeDlp.ico           # Сгенерированная иконка для Windows GUI .exe
 ├── scripts/
 │   └── bump_version.py            # Увеличивает patch-версию в pyproject.toml и metainfo.xml на 1
 ├── screenshots/                   # Скриншоты GUI для README
 ├── .github/workflows/
 │   ├── flatpak.yml                # CI: сборка Flatpak (Linux)
-│   ├── windows-build.yml          # CI: сборка Windows CLI .exe (PyInstaller, без GUI)
+│   ├── windows-build.yml          # CI: сборка Windows CLI .exe и GUI .exe (PyQt6, PyInstaller)
 │   └── macos-build.yml            # CI: сборка macOS .app + .dmg-установщика (GUI, Homebrew + PyInstaller)
 ├── build.sh                       # Сборка Python-пакета (wheel/sdist) + бамп версии
 ├── pyproject.toml                 # Метаданные и зависимости пакета
@@ -163,14 +187,19 @@ anime-dlp/
   `packaging/macos_gui_entry.py`, GUI запускается напрямую, без CLI-диалога),
   упаковывает в `.dmg` через `create-dmg` и прикрепляет его к GitHub Release
   при пуше тега `v*.*.*`.
-- Windows (GitHub Actions, `.github/workflows/windows-build.yml`): собирает
-  автономный CLI-исполняемый файл (`.exe`, без GUI) через PyInstaller
-  (`packaging/pyinstaller_entry.py`) и прикрепляет его к GitHub Release при
-  пуше тега `v*.*.*`. GUI под Windows автоматически не собирается (готовых
-  pip-колёс GTK4/libadwaita нет) — запускается из исходников вручную через
-  MSYS2, подробная инструкция в `WINDOWS.md`.
+- Windows (GitHub Actions, `.github/workflows/windows-build.yml`, два job'а):
+  `build` собирает автономный CLI-исполняемый файл (`.exe`, без GUI) через
+  PyInstaller (`packaging/pyinstaller_entry.py`); `build-gui` собирает
+  автономный GUI-исполняемый файл на **PyQt6** (`.exe`, `--windowed`) через
+  PyInstaller (`packaging/windows_gui_entry.py`, иконка
+  `packaging/windows/AnimeDlp.ico`) — в отличие от GTK4/libadwaita, у PyQt6
+  есть готовые pip-колёса под Windows, поэтому сборка полностью
+  автоматическая, без MSYS2. Оба `.exe` прикрепляются к GitHub Release при
+  пуше тега `v*.*.*`. GTK-версию GUI на Windows всё ещё можно запустить из
+  исходников вручную через MSYS2 (`ANIME_DLP_GUI_BACKEND=gtk`, см.
+  `WINDOWS.md`) — например, для разработки самого GTK-бэкенда.
 - Flatpak — только для Linux (сборка через `flatpak.yml`). Готовых
-  GTK4-пакетов для Windows/macOS в pip нет — их устанавливают через
-  системный пакетный менеджер платформы (см. README → «Windows и macOS»).
+  GTK4-пакетов для macOS в pip нет — их устанавливают через Homebrew (см.
+  README → «Windows и macOS»).
 
 Подробная инструкция по установке и использованию — в `README.md`.

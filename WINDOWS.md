@@ -2,22 +2,23 @@
 
 Подробная пошаговая инструкция для тех, кто хочет запустить **и CLI, и GUI**
 `anime-dlp` на Windows, собирая программу из исходного кода (а не используя
-готовый `.exe` из [Releases](https://github.com/alttux/anime-dlp/releases)).
+готовые `.exe` из [Releases](https://github.com/alttux/anime-dlp/releases)).
 
-> Если нужен только консольный интерфейс без графики — самый быстрый путь
-> вообще без всего этого: скачать `anime-dlp-windows-x86_64.exe` из
-> [Releases](https://github.com/alttux/anime-dlp/releases) и просто
-> запустить его. Эта инструкция нужна, если вы хотите:
-> - запускать код из исходников (для разработки/отладки/своих правок),
-> - или использовать **графический интерфейс** — он не входит в готовый
->   `.exe`, потому что GTK4/libadwaita нельзя туда вкомпилировать без
->   MSYS2 (см. ниже почему).
+> Если готовый `.exe` устраивает — самый быстрый путь вообще без этой
+> инструкции: скачайте `anime-dlp-windows-x86_64-<версия>.exe` (CLI) или
+> `anime-dlp-gui-windows-x86_64-<версия>.exe` (GUI на PyQt6) из
+> [Releases](https://github.com/alttux/anime-dlp/releases) и запустите.
+> Оба файла автономные, Python ставить не нужно. Эта инструкция нужна, если
+> вы хотите запускать код из исходников — для разработки/отладки/своих
+> правок, либо чтобы запустить **GTK-версию GUI** (используется на
+> Linux/macOS) прямо на Windows через MSYS2 — например, для разработки
+> самого GTK-бэкенда.
 
 ## Содержание
 
 - [Как это устроено на Windows](#как-это-устроено-на-windows)
-- [Вариант A — только CLI, без графики](#вариант-a--только-cli-без-графики)
-- [Вариант B — CLI + GUI через MSYS2](#вариант-b--cli--gui-через-msys2)
+- [Вариант A — CLI (и, опционально, GUI на PyQt6)](#вариант-a--cli-и-опционально-gui-на-pyqt6)
+- [Вариант B — GTK-версия GUI через MSYS2](#вариант-b--gtk-версия-gui-через-msys2)
 - [Аргументы командной строки](#аргументы-командной-строки)
 - [Куда сохраняются файлы и токен](#куда-сохраняются-файлы-и-токен)
 - [Быстрый запуск без терминала (ярлык)](#быстрый-запуск-без-терминала-ярлык)
@@ -33,20 +34,23 @@
 `anime_parsers_ru`) — для неё подходит **любой** Python, в том числе
 официальный установщик с [python.org](https://www.python.org/).
 
-Графический интерфейс (`--gui`) построен на **GTK4 + libadwaita** через
-биндинги `PyGObject`. У этой связки нет готового пакета в PyPI для Windows
-(`pip install PyGObject` там не соберётся — не будет самих библиотек GTK) —
-её ставят через **[MSYS2](https://www.msys2.org/)**, который приносит с
-собой полноценную сборку GTK4/libadwaita под Windows вместе с собственным
-Python. Поэтому:
+Графический интерфейс (`--gui`) на Windows построен на **PyQt6** — у него
+есть обычные `pip`-колёса для Windows, никакого системного окружения вроде
+MSYS2 не требуется. `anime_dlp/gui/__init__.py` сам выбирает бэкенд по
+платформе: PyQt6 на Windows, GTK4 + libadwaita (через `PyGObject`) — на
+Linux/macOS; оба реализуют один и тот же набор экранов. `pip install
+".[gui]"` на Windows ставит именно `PyQt6` — никаких дополнительных
+системных пакетов не нужно, поэтому:
 
-- Для **только CLI** — вариант A ниже, он проще и не требует MSYS2.
-- Для **CLI + GUI** — сразу переходите к варианту B, он тоже включает CLI
-  (это один и тот же пакет).
+- Для **CLI и/или GUI на PyQt6** — вариант A ниже, он проще и не требует
+  MSYS2.
+- Для **GTK-версии GUI** конкретно на Windows (нужно очень редко — обычно
+  только при разработке самого GTK-бэкенда) — вариант B, требует MSYS2,
+  так как готовых pip-колёс GTK4/libadwaita для Windows нет.
 
 ---
 
-## Вариант A — только CLI, без графики
+## Вариант A — CLI (и, опционально, GUI на PyQt6)
 
 ### 1. Установите Python
 
@@ -97,17 +101,31 @@ python -m venv .venv
 ```
 
 После активации в начале строки терминала появится `(.venv)` — значит всё
-верно. Дальше ставим зависимости и сам пакет:
+верно. Дальше ставим зависимости и сам пакет — **без GUI**:
 
 ```powershell
 pip install -r requirements.txt
 pip install .
 ```
 
+Либо **вместе с GUI на PyQt6** (`pip` сам скачает готовое колесо PyQt6,
+никаких системных пакетов ставить не нужно):
+
+```powershell
+pip install -r requirements.txt
+pip install ".[gui]"
+```
+
 ### 5. Запустите
 
 ```powershell
 anime-dlp -d "$HOME\Videos\Anime"
+```
+
+Если ставили `".[gui]"` — можно запустить и графический интерфейс:
+
+```powershell
+anime-dlp --gui
 ```
 
 Если PowerShell не находит команду `anime-dlp` — убедитесь, что venv
@@ -136,7 +154,12 @@ Windows → builds from gyan.dev), распакуйте и добавьте па
 
 ---
 
-## Вариант B — CLI + GUI через MSYS2
+## Вариант B — GTK-версия GUI через MSYS2
+
+> Обычно не нужен: GUI на Windows — это PyQt6 (вариант A выше, обычный
+> `pip`, без MSYS2). Этот вариант нужен только чтобы запустить именно
+> **GTK4/libadwaita-версию** интерфейса (ту же, что используется на
+> Linux/macOS) прямо на Windows — например, при разработке GTK-бэкенда.
 
 ### 1. Установите MSYS2
 
@@ -221,30 +244,35 @@ cd anime-dlp
 > терминала MSYS2. Диски Windows видны в MSYS2 как `/c/...`, например
 > `cd /c/Users/ИмяПользователя/anime-dlp`.
 
-### 6. Установите anime-dlp вместе с GUI-зависимостью
+### 6. Установите anime-dlp
+
+`PyGObject` уже установлен через `pacman` на предыдущем шаге и виден этому
+Python — ставить пакет `anime-dlp` с extras `[gui]` не нужно (тот extras
+на Windows тянет `PyQt6`, а не `PyGObject`, см. `pyproject.toml`):
 
 ```bash
-python -m pip install --no-build-isolation ".[gui]"
+python -m pip install --no-build-isolation .
 ```
 
-`--no-build-isolation` нужен, чтобы pip использовал уже установленный через
-`pacman` `PyGObject`, а не пытался собрать его сам (это долго и обычно не
-нужно). Если pip пожалуется на "externally-managed-environment" — добавьте
-флаг `--break-system-packages`:
+Если pip пожалуется на "externally-managed-environment" — добавьте флаг
+`--break-system-packages`:
 
 ```bash
-python -m pip install --no-build-isolation --break-system-packages ".[gui]"
+python -m pip install --no-build-isolation --break-system-packages .
 ```
 
-### 7. Запустите GUI
+### 7. Запустите GTK-версию GUI
 
-Из того же терминала **MSYS2 MinGW64**:
+По умолчанию `anime-dlp --gui` на Windows запускает **PyQt6**-версию — для
+GTK-версии, установленной в этом варианте, задайте переменную окружения
+`ANIME_DLP_GUI_BACKEND=gtk`. Из того же терминала **MSYS2 MinGW64**:
 
 ```bash
-anime-dlp --gui
+ANIME_DLP_GUI_BACKEND=gtk anime-dlp --gui
 ```
 
-Откроется окно программы. Консольная версия работает точно так же:
+Откроется окно программы (на GTK4/libadwaita). Консольная версия работает
+точно так же и без этой переменной:
 
 ```bash
 anime-dlp -d /c/Users/ИмяПользователя/Videos/Anime
@@ -263,7 +291,7 @@ anime-dlp -d /c/Users/ИмяПользователя/Videos/Anime
 |----------------------|---------------------------------------------------------------------------|
 | `-d`, `--dir`        | Директория для скачивания (по умолчанию — `%APPDATA%`-профиль, см. ниже) |
 | `--logging`          | Сохранять весь вывод консоли в файл `anime-dlp.log` внутри директории загрузки |
-| `--gui`              | Запустить графический интерфейс (только вариант B / готовый GUI-набор)   |
+| `--gui`              | Запустить графический интерфейс (PyQt6; `ANIME_DLP_GUI_BACKEND=gtk` — версия на GTK4, вариант B) |
 | `-i`, `--interface`  | Привязка к сетевому интерфейсу — **не работает на Windows**, программа сразу завершится с понятной ошибкой, если флаг передан |
 | `-h`, `--help`       | Показать справку по аргументам                                          |
 
@@ -303,13 +331,13 @@ anime-dlp -d "C:\Users\ИмяПользователя\Videos\Anime"
 
 ```bat
 @echo off
-C:\msys64\usr\bin\bash.exe -lc "cd /c/Users/ИмяПользователя/anime-dlp && anime-dlp --gui"
+C:\msys64\usr\bin\bash.exe -lc "cd /c/Users/ИмяПользователя/anime-dlp && ANIME_DLP_GUI_BACKEND=gtk anime-dlp --gui"
 ```
 
-Двойной клик по этому файлу откроет GUI напрямую, без необходимости
-разбираться с терминалами MSYS2 каждый раз.
+Двойной клик по этому файлу откроет GTK-версию GUI напрямую, без
+необходимости разбираться с терминалами MSYS2 каждый раз.
 
-Для CLI-варианта (установка через обычный Python, вариант A) можно сделать
+Для варианта A (обычный Python + `.venv`, GUI на PyQt6) можно сделать
 аналогичный `.bat`:
 
 ```bat
@@ -328,9 +356,9 @@ pause
 ```bash
 cd anime-dlp
 git pull
-python -m pip install --no-build-isolation ".[gui]"   # для варианта B
+python -m pip install --no-build-isolation .   # для варианта B (GTK)
 # либо для варианта A (в активированном .venv):
-# pip install .
+# pip install ".[gui]"   # с PyQt6-версией GUI, или просто `pip install .` без GUI
 ```
 
 ---
@@ -343,10 +371,14 @@ python -m pip install --no-build-isolation ".[gui]"   # для варианта 
 папки проекта. Вариант B: убедитесь, что открыт именно терминал
 **MSYS2 MinGW64** (не MSYS2 MSYS/MINGW32).
 
-**`ModuleNotFoundError: No module named 'gi'` при запуске `--gui`**
-GUI-зависимости не установлены в тот Python, из которого запускается
+**`ModuleNotFoundError: No module named 'PyQt6'` при запуске `--gui` (вариант A)**
+GUI-зависимость не установлена в этот `.venv` — выполните
+`pip install ".[gui]"` в активированном окружении (шаг 4).
+
+**`ModuleNotFoundError: No module named 'gi'` при `ANIME_DLP_GUI_BACKEND=gtk anime-dlp --gui` (вариант B)**
+GTK-зависимости не установлены в тот Python, из которого запускается
 программа. Убедитесь, что вы в терминале MSYS2 MinGW64 и что шаг 6
-(`pip install ".[gui]"`) выполнялся именно там, а не в обычном PowerShell.
+(`pip install .`) выполнялся именно там, а не в обычном PowerShell.
 
 **Окно GUI открывается, но иконки — пустые квадраты/крестики**
 Не хватает темы иконок. Проверьте, что при установке пакетов (шаг 4) не
@@ -361,10 +393,14 @@ GUI-зависимости не установлены в тот Python, из к
 Это стандартное предупреждение Windows для исполняемых файлов без цифровой
 подписи (подписание сертификатом стоит денег и не делается для
 open-source-утилит). Нажмите **"Подробнее" → "Выполнить в любом случае"**.
-Если не доверяете — соберите `.exe` сами
-(`pip install pyinstaller && pyinstaller --onefile --name anime-dlp
-packaging/pyinstaller_entry.py`, после `pip install .`) либо запускайте из
-исходников по этой инструкции.
+Если не доверяете — соберите `.exe` сами:
+- CLI: `pip install pyinstaller && pyinstaller --onefile --name anime-dlp
+  packaging/pyinstaller_entry.py`, после `pip install .`.
+- GUI (PyQt6): `pip install ".[gui]" pyinstaller && pyinstaller --onefile
+  --windowed --icon packaging/windows/AnimeDlp.ico
+  packaging/windows_gui_entry.py`.
+
+Либо запускайте из исходников по этой инструкции.
 
 **Ошибка про ffmpeg при скачивании конкретной серии**
 Значит эта серия доступна только через HLS-поток — установите `ffmpeg`:

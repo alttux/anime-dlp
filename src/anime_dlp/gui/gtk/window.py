@@ -2,7 +2,7 @@ from pathlib import Path
 
 from gi.repository import Adw
 
-from anime_dlp.gui.search_page import SearchPage
+from anime_dlp.gui.gtk.search_page import SearchPage
 
 
 class AnimeDlpWindow(Adw.ApplicationWindow):

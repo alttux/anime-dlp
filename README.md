@@ -138,20 +138,25 @@ pip install ".[gui]"
 
 Flatpak — только для Linux, но CLI и GUI работают и на Windows, и на macOS.
 
-**Windows**: готовый **CLI `.exe`** (без GUI, ничего дополнительно
-устанавливать не нужно) собирается автоматически в CI на каждый релизный
-тег — скачать можно во вкладке [Releases][releases], либо для последнего
-коммита в `main` — во вкладке [Actions][actions-win] → workflow
-"Windows build" → артефакты сборки. Файл автономный (собран PyInstaller'ом),
-Python ставить не нужно:
+**Windows**: готовые портативные **CLI `.exe`** и **GUI `.exe`** (на PyQt6,
+ничего дополнительно устанавливать не нужно) собираются автоматически в CI
+на каждый релизный тег — скачать можно во вкладке [Releases][releases],
+либо для последнего коммита в `main` — во вкладке [Actions][actions-win] →
+workflow "Windows build" → артефакты сборки. Файлы автономные (собраны
+PyInstaller'ом), Python ставить не нужно:
 
 ```powershell
 .\anime-dlp-windows-x86_64-<версия>.exe -d "$HOME\Videos\Anime"
+.\anime-dlp-gui-windows-x86_64-<версия>.exe
 ```
 
-> 🪟 Для GUI на Windows готовой сборки в CI нет (GTK4/libadwaita без готовых
-> pip-колёс) — собирается из исходников через MSYS2, см. отдельную
-> **подробную пошаговую инструкцию** — **[WINDOWS.md](WINDOWS.md)**.
+> 🪟 На Windows GUI собран на **PyQt6** (а не GTK4/libadwaita, как на
+> Linux/macOS — для GTK4 нет готовых pip-колёс под Windows), но повторяет
+> тот же интерфейс: экраны, элементы и их расположение совпадают. Собрать
+> его самостоятельно из исходников можно через
+> `packaging/windows/make_ico.sh` + PyInstaller (см. workflow
+> `.github/workflows/windows-build.yml`, job `build-gui`); подробная
+> инструкция по CLI/GTK-GUI из исходников — **[WINDOWS.md](WINDOWS.md)**.
 
 **macOS**: готовый **`.dmg`-установщик** с GUI (GTK4 + libadwaita, ffmpeg
 внутрь не входит) собирается автоматически в CI на каждый релизный тег —
@@ -182,35 +187,29 @@ Python ставить не нужно:
 `packaging/macos/` (`make_icns.sh` + `build.sh`) — именно они используются в
 CI, см. `.github/workflows/macos-build.yml`.
 
-**Графический интерфейс (GUI)** собирается из исходников, так как готовых
-pip-колёс GTK4/libadwaita для Windows и macOS нет — их ставят через
-системный пакетный менеджер платформы.
+**Графический интерфейс (GUI)** на Linux и macOS собирается из исходников,
+так как готовых pip-колёс GTK4/libadwaita для этих платформ (кроме Linux)
+нет — их ставят через системный пакетный менеджер платформы. На Windows
+GUI написан на **PyQt6** (`pip`-колёса есть, ставить ничего системного не
+нужно) и собирается в CI как готовый portable `.exe` — см. раздел выше.
 
 <details>
-<summary><b>GUI на Windows — через MSYS2</b></summary>
+<summary><b>GUI на Windows — сборка из исходников (PyQt6)</b></summary>
 
-1. Установите [MSYS2](https://www.msys2.org/) и откройте терминал
-   **MSYS2 MinGW64** (не обычный `MSYS2 MSYS`).
-2. Поставьте GTK4, libadwaita и Python-биндинги:
-   ```bash
-   pacman -Syu   # при необходимости перезапустить терминал и повторить
-   pacman -S mingw-w64-x86_64-python mingw-w64-x86_64-python-pip \
-             mingw-w64-x86_64-python-gobject mingw-w64-x86_64-gtk4 \
-             mingw-w64-x86_64-libadwaita mingw-w64-x86_64-ffmpeg
-   ```
-3. Установите anime-dlp в этот же MSYS2-Python (из исходников или, после
-   публикации на PyPI, `pip install anime-dlp[gui]`):
-   ```bash
-   git clone https://github.com/alttux/anime-dlp.git
-   cd anime-dlp
-   python -m pip install --no-build-isolation ".[gui]"
-   ```
-4. Запуск (из того же терминала MSYS2 MinGW64):
-   ```bash
-   anime-dlp --gui
-   ```
+Готовый `.exe` из CI (см. выше) не требует Python вообще. Чтобы запустить
+GUI из исходников:
 
-Подробности и решение проблем — в [WINDOWS.md](WINDOWS.md).
+```powershell
+git clone https://github.com/alttux/anime-dlp.git
+cd anime-dlp
+python -m pip install ".[gui]"
+anime-dlp --gui
+```
+
+`pip install ".[gui]"` на Windows ставит `PyQt6` (на Linux/macOS — вместо
+него `PyGObject` для GTK4-версии). Для запуска CLI/GTK-GUI из исходников
+через MSYS2 (например, для разработки GTK-версии на Windows) — см.
+[WINDOWS.md](WINDOWS.md).
 </details>
 
 <details>
@@ -284,7 +283,9 @@ anime-dlp -d ~/Videos/Anime
 
 ### Графический интерфейс
 
-Вместо консольного диалога можно запустить GUI на GTK4 + libadwaita:
+Вместо консольного диалога можно запустить GUI — на Linux и macOS это
+GTK4 + libadwaita, на Windows (portable `.exe` или из исходников) — PyQt6
+с тем же набором экранов и элементов:
 
 ```bash
 anime-dlp --gui
@@ -314,7 +315,7 @@ anime-dlp --gui
 |-------------------|----------------------------------------------------------------------|
 | `-d`, `--dir`     | Директория для скачивания аниме (по умолчанию — директория программы) |
 | `--logging`       | Сохранять весь вывод консоли в файл `anime-dlp.log` внутри директории загрузки |
-| `--gui`           | Запустить графический интерфейс (GTK4 + libadwaita) вместо консольного диалога |
+| `--gui`           | Запустить графический интерфейс (GTK4 + libadwaita на Linux/macOS, PyQt6 на Windows) вместо консольного диалога |
 | `-i`, `--interface` | Сетевой интерфейс для выхода в интернет, в обход VPN/TUN (только Linux) |
 | `-h`, `--help`    | Показать справку по аргументам                                     |
 
@@ -378,13 +379,23 @@ anime-dlp/
 │   │   ├── app.py              # Основной сценарий взаимодействия с пользователем
 │   │   ├── prompts.py          # Запросы ввода у пользователя
 │   │   └── display.py          # Оформление вывода (таблицы, баннеры, сообщения)
-│   ├── gui/                     # Графический интерфейс (GTK4 + libadwaita, --gui)
-│   │   ├── app.py               # Точка входа GUI, Adw.Application
-│   │   ├── window.py            # Главное окно и навигация между экранами
-│   │   ├── search_page.py       # Поиск аниме с живыми подсказками
-│   │   ├── details_page.py      # Выбор озвучки и серий, кнопка «Скачать»
-│   │   ├── download_page.py     # Экран скачивания с прогресс-барами
-│   │   └── formatting.py        # Форматирование размера/скорости для GUI
+│   ├── gui/                     # Графический интерфейс (--gui)
+│   │   ├── __init__.py          # Выбор бэкенда: PyQt6 на Windows, GTK4 на Linux/macOS
+│   │   ├── formatting.py        # Форматирование размера/скорости (общее для gtk/ и qt/)
+│   │   ├── gtk/                 # Бэкенд на GTK4 + libadwaita (Linux/macOS)
+│   │   │   ├── app.py           # Точка входа GUI, Adw.Application
+│   │   │   ├── window.py        # Главное окно и навигация между экранами
+│   │   │   ├── search_page.py   # Поиск аниме с живыми подсказками
+│   │   │   ├── details_page.py  # Выбор озвучки и серий, кнопка «Скачать»
+│   │   │   └── download_page.py # Экран скачивания с прогресс-барами
+│   │   └── qt/                  # Бэкенд на PyQt6 (Windows), тот же набор экранов
+│   │       ├── app.py           # Точка входа GUI, QApplication
+│   │       ├── window.py        # Главное окно и навигация между экранами
+│   │       ├── widgets.py       # Составные виджеты (карточки, строки, flow-layout)
+│   │       ├── workers.py       # Фоновые QThread-воркеры (поиск/инфо/скачивание)
+│   │       ├── search_page.py   # Поиск аниме с живыми подсказками
+│   │       ├── details_page.py  # Выбор озвучки и серий, кнопка «Скачать»
+│   │       └── download_page.py # Экран скачивания с прогресс-барами
 │   └── core/                   # Основная бизнес-логика
 │       ├── anime_service.py    # Поиск аниме и получение ссылок на скачивание
 │       ├── downloader.py       # Многопоточное скачивание с колбэком прогресса
@@ -407,7 +418,8 @@ anime-dlp/
 - [rich](https://github.com/Textualize/rich) — оформление терминального интерфейса, таблицы и прогресс-бары
 - [requests](https://docs.python-requests.org/) — HTTP-запросы и скачивание файлов
 - [beautifulsoup4](https://www.crummy.com/software/BeautifulSoup/) — парсинг HTML
-- [PyGObject](https://pygobject.gnome.org/) + **GTK4** / **libadwaita** — графический интерфейс (опционально, `--gui`)
+- [PyGObject](https://pygobject.gnome.org/) + **GTK4** / **libadwaita** — графический интерфейс на Linux/macOS (опционально, `--gui`)
+- [PyQt6](https://pypi.org/project/PyQt6/) — графический интерфейс на Windows (опционально, `--gui`)
 
 ---
 

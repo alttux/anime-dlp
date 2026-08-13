@@ -31,7 +31,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = ["PyGObject>=3.50.0"]
+gui = [
+    "PyGObject>=3.50.0; sys_platform != 'win32'",
+    "PyQt6>=6.7; sys_platform == 'win32'",
+]
 
 [project.scripts]
 anime-dlp = "anime_dlp.main:main"

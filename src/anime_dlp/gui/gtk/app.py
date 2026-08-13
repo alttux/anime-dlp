@@ -7,7 +7,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw
 
-from anime_dlp.gui.window import AnimeDlpWindow
+from anime_dlp.gui.gtk.window import AnimeDlpWindow
 
 
 def run_gui(download_dir: Path) -> int:

@@ -1,0 +1,116 @@
+"""Фоновые воркеры на QThread, переносящие вызовы anime_dlp.core.* в
+отдельный поток и сообщающие о результате через сигналы (аналог связки
+threading.Thread + GLib.idle_add в GTK-версии)."""
+
+from pathlib import Path
+
+import requests
+from PyQt6.QtCore import QThread, pyqtSignal
+
+from anime_dlp.core.anime_service import get_anime_info, get_download_link, search_anime
+from anime_dlp.core.downloader import download_episode
+from anime_dlp.filenames import sanitize_filename
+
+
+class SearchWorker(QThread):
+    finished_search = pyqtSignal(str, list, str)
+
+    def __init__(self, query: str, parent=None):
+        super().__init__(parent)
+        self.query = query
+
+    def run(self):
+        try:
+            items = search_anime(self.query)
+            error = ""
+        except Exception as exc:
+            items = []
+            error = str(exc)
+        self.finished_search.emit(self.query, items, error)
+
+
+class AnimeInfoWorker(QThread):
+    finished_info = pyqtSignal(dict, str)
+
+    def __init__(self, shikimori_id: str, parent=None):
+        super().__init__(parent)
+        self.shikimori_id = shikimori_id
+
+    def run(self):
+        try:
+            info = get_anime_info(self.shikimori_id)
+            error = ""
+        except Exception as exc:
+            info = {}
+            error = str(exc)
+        self.finished_info.emit(info, error)
+
+
+class PosterWorker(QThread):
+    finished_poster = pyqtSignal(bytes, str)
+
+    def __init__(self, url: str, parent=None):
+        super().__init__(parent)
+        self.url = url
+
+    def run(self):
+        try:
+            response = requests.get(self.url, timeout=10)
+            response.raise_for_status()
+            data = response.content
+            error = ""
+        except requests.RequestException as exc:
+            data = b""
+            error = str(exc)
+        self.finished_poster.emit(data, error)
+
+
+class DownloadWorker(QThread):
+    file_started = pyqtSignal(str, str, int, int)
+    file_progress = pyqtSignal(str, int, int)
+    file_done = pyqtSignal(str, str)
+    file_error = pyqtSignal(str, str)
+    all_done = pyqtSignal()
+    fatal_error = pyqtSignal(str)
+
+    def __init__(
+        self,
+        item: dict,
+        translation_id: str,
+        eps_to_download: list[int],
+        download_dir: Path,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.item = item
+        self.translation_id = translation_id
+        self.eps_to_download = eps_to_download
+        self.download_dir = download_dir
+
+    def run(self):
+        try:
+            sid = self.item["shikimori_id"]
+            total = len(self.eps_to_download)
+            started: set[str] = set()
+            for index, ep in enumerate(self.eps_to_download, 1):
+                safe_title = sanitize_filename(self.item["title"])
+                filename = f"{safe_title}.mp4" if ep == 0 else f"{ep}.mp4"
+                filepath = self.download_dir / filename
+                try:
+                    link, quality, _ = get_download_link(sid, ep, self.translation_id)
+
+                    self.file_started.emit(filename, str(filepath), index, total)
+                    started.add(filename)
+
+                    def on_progress(downloaded, total_bytes, filename=filename):
+                        self.file_progress.emit(filename, downloaded, total_bytes)
+
+                    download_episode(link, filepath, quality, on_progress=on_progress)
+                    self.file_done.emit(filename, str(filepath))
+                except Exception as exc:
+                    if filename not in started:
+                        self.file_started.emit(filename, str(filepath), index, total)
+                    self.file_error.emit(filename, str(exc))
+            self.all_done.emit()
+        except Exception as exc:
+            self.fatal_error.emit(str(exc))

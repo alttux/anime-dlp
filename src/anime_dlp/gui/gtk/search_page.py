@@ -133,7 +133,7 @@ class SearchPage(Adw.NavigationPage):
                 "У этого аниме нет shikimori_id, скачивание невозможно"
             )
             return
-        from anime_dlp.gui.details_page import DetailsPage
+        from anime_dlp.gui.gtk.details_page import DetailsPage
 
         self.window.push_page(DetailsPage(window=self.window, item=item))
 
