@@ -119,13 +119,17 @@ anime-dlp/
 │   ├── io.github.alttux.AnimeDlp.yml
 │   └── build.sh                   # Сборка + бамп версии, кладёт anime-dlp.flatpak в корень
 ├── packaging/
-│   └── pyinstaller_entry.py       # Точка входа для PyInstaller-сборки CLI (Windows/macOS)
+│   ├── pyinstaller_entry.py       # Точка входа для ручной PyInstaller-сборки CLI (любая платформа)
+│   ├── macos_gui_entry.py         # Точка входа GUI для macOS .app-бандла (PyInstaller, --windowed)
+│   └── macos/
+│       ├── make_icns.sh           # SVG-иконка проекта → AnimeDlp.icns (rsvg-convert + iconutil)
+│       └── build.sh               # Сборка dist/AnimeDlp.app через PyInstaller (GTK4/libadwaita из Homebrew)
 ├── scripts/
 │   └── bump_version.py            # Увеличивает patch-версию в pyproject.toml и metainfo.xml на 1
 ├── screenshots/                   # Скриншоты GUI для README
 ├── .github/workflows/
 │   ├── flatpak.yml                # CI: сборка Flatpak (Linux)
-│   └── desktop-build.yml          # CI: CLI-бинарники + GUI smoke-тесты для Windows/macOS
+│   └── macos-build.yml            # CI: сборка macOS .app + .dmg-установщика (GUI, Homebrew + PyInstaller)
 ├── build.sh                       # Сборка Python-пакета (wheel/sdist) + бамп версии
 ├── pyproject.toml                 # Метаданные и зависимости пакета
 ├── requirements.txt                # Зафиксированные версии зависимостей
@@ -151,14 +155,17 @@ anime-dlp/
   последним `<release>` в `data/io.github.alttux.AnimeDlp.metainfo.xml` —
   версия общая для wheel/sdist и Flatpak-пакета и растёт при каждой сборке
   любого из них.
-- Windows/macOS (GitHub Actions, `.github/workflows/desktop-build.yml`):
-  джоба `cli` собирает автономный CLI-исполняемый файл через PyInstaller
-  (`packaging/pyinstaller_entry.py`) для обеих платформ и прикрепляет его к
-  GitHub Release при пуше тега `v*.*.*`; джобы `gui-windows`/`gui-macos`
-  ставят GTK4/libadwaita/PyGObject через MSYS2 (Windows) и Homebrew (macOS)
-  и проверяют, что GUI импортируется и запускается. Flatpak — только для
-  Linux (сборка через `flatpak.yml`), готовых GTK4-пакетов для Windows/macOS
-  в pip нет — их устанавливают через системный пакетный менеджер платформы
-  (см. README → «Windows и macOS»).
+- macOS (GitHub Actions, `.github/workflows/macos-build.yml`, `runs-on:
+  macos-14`, только `aarch64`): ставит GTK4/libadwaita/PyGObject через
+  Homebrew, генерирует иконку (`packaging/macos/make_icns.sh`), собирает
+  `dist/AnimeDlp.app` через PyInstaller (`packaging/macos/build.sh` +
+  `packaging/macos_gui_entry.py`, GUI запускается напрямую, без CLI-диалога),
+  упаковывает в `.dmg` через `create-dmg` и прикрепляет его к GitHub Release
+  при пуше тега `v*.*.*`.
+- Windows: автоматической сборки в CI нет — CLI и GUI собираются/запускаются
+  из исходников вручную, подробная инструкция в `WINDOWS.md`.
+- Flatpak — только для Linux (сборка через `flatpak.yml`). Готовых
+  GTK4-пакетов для Windows/macOS в pip нет — их устанавливают через
+  системный пакетный менеджер платформы (см. README → «Windows и macOS»).
 
 Подробная инструкция по установке и использованию — в `README.md`.

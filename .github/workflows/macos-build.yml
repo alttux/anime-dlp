@@ -1,0 +1,128 @@
+name: macOS build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-arm64:
+    name: macOS aarch64 (.app + .dmg)
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Homebrew dependencies
+        run: |
+          echo "=== DEBUG: Installing Homebrew packages ==="
+          brew update
+          brew install python@3.13 gtk4 libadwaita adwaita-icon-theme \
+                        gobject-introspection pygobject3 py3cairo librsvg \
+                        create-dmg
+          brew link --overwrite libadwaita
+          brew list --formula | grep -E "(python@3.13|gtk4|libadwaita|gobject-introspection|pygobject3|py3cairo|librsvg)"
+
+      - name: Prepare Homebrew virtual environment
+        run: |
+          PYTHON_PATH="$(brew --prefix python@3.13)/bin/python3.13"
+          "$PYTHON_PATH" -m venv .venv-homebrew --system-site-packages
+          source .venv-homebrew/bin/activate
+          python -m pip install --upgrade pip wheel
+          python -m pip install . PyInstaller pyinstaller-hooks-contrib
+          pip list | grep -iE "(anime.dlp|PyInstaller)"
+
+      - name: Generate app icon (.icns)
+        run: |
+          source .venv-homebrew/bin/activate
+          chmod +x packaging/macos/make_icns.sh
+          ./packaging/macos/make_icns.sh
+
+      - name: Build .app bundle with PyInstaller
+        run: |
+          source .venv-homebrew/bin/activate
+          chmod +x packaging/macos/build.sh
+          ./packaging/macos/build.sh
+
+      - name: Verify build outputs
+        run: |
+          echo "=== DEBUG: dist directory ==="
+          ls -la dist/
+          if [ ! -d "dist/AnimeDlp.app" ]; then
+            echo "=== ERROR: dist/AnimeDlp.app not found ==="
+            exit 1
+          fi
+          if [ ! -x "dist/AnimeDlp.app/Contents/MacOS/AnimeDlp" ]; then
+            echo "=== ERROR: AnimeDlp executable missing/not executable ==="
+            exit 1
+          fi
+          echo "=== DEBUG: App bundle size: $(du -sh dist/AnimeDlp.app) ==="
+
+      - name: Smoke-test bundled GUI imports
+        run: |
+          source .venv-homebrew/bin/activate
+          GI_TYPELIB_PATH="dist/AnimeDlp.app/Contents/Frameworks/gi_typelibs" \
+          XDG_DATA_DIRS="dist/AnimeDlp.app/Contents/Frameworks/share" \
+          python3 -c "
+          import gi
+          gi.require_version('Gtk', '4.0')
+          gi.require_version('Adw', '1')
+          from gi.repository import Adw, Gtk
+          Adw.init()
+          print('GTK', Gtk.get_major_version(), Gtk.get_minor_version())
+          print('Adwaita', Adw.MAJOR_VERSION, Adw.MINOR_VERSION)
+          "
+
+      - name: Determine artifact names
+        id: artifact-info
+        run: |
+          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          if [ -z "$VERSION" ]; then
+            VERSION=$(date +%Y%m%d)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "dmg=AnimeDlp-macOS-${VERSION}-arm64.dmg" >> "$GITHUB_OUTPUT"
+
+      - name: Create .dmg installer
+        run: |
+          DMG_NAME="${{ steps.artifact-info.outputs.dmg }}"
+          create-dmg \
+            --volname "AnimeDlp" \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "AnimeDlp.app" 150 190 \
+            --app-drop-link 450 190 \
+            "dist/$DMG_NAME" \
+            "dist/AnimeDlp.app" || true
+          if [ ! -f "dist/$DMG_NAME" ]; then
+            echo "=== ERROR: DMG not created ==="
+            ls -la dist/
+            exit 1
+          fi
+
+      - name: Generate DMG checksum
+        run: |
+          DMG_NAME="${{ steps.artifact-info.outputs.dmg }}"
+          shasum -a 256 "dist/$DMG_NAME" > "dist/$DMG_NAME.sha256"
+          cat "dist/$DMG_NAME.sha256"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anime-dlp-${{ steps.artifact-info.outputs.version }}-macos-arm64-dmg
+          path: dist/${{ steps.artifact-info.outputs.dmg }}
+
+      - name: Attach DMG to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/${{ steps.artifact-info.outputs.dmg }}
+            dist/${{ steps.artifact-info.outputs.dmg }}.sha256

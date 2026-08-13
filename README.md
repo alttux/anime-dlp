@@ -137,49 +137,35 @@ pip install ".[gui]"
 ### Windows и macOS
 
 Flatpak — только для Linux, но CLI и GUI работают и на Windows, и на macOS.
-Каждый пуш в `main` и каждый релизный тег собираются и проверяются в CI
-(`.github/workflows/desktop-build.yml`), поэтому шаги ниже гарантированно
-рабочие.
 
-> 🪟 Для Windows есть отдельная **подробная пошаговая инструкция** по запуску
-> из исходников (CLI и GUI, с объяснением каждого шага и разделом решения
-> проблем) — **[WINDOWS.md](WINDOWS.md)**. Ниже — краткая версия для обеих
-> платформ.
+> 🪟 Для Windows готовой сборки в CI нет — есть отдельная **подробная
+> пошаговая инструкция** по запуску из исходников (CLI и GUI, с объяснением
+> каждого шага и разделом решения проблем) — **[WINDOWS.md](WINDOWS.md)**.
 
-**Готовый исполняемый файл CLI** (без GUI, ничего дополнительно
-устанавливать не нужно) можно скачать во вкладке [Releases][releases] —
-`anime-dlp-windows-x86_64.exe` или `anime-dlp-macos-arm64` — либо, для
-последнего коммита в `main`, во вкладке [Actions][actions] → workflow
-"Windows & macOS build" → артефакты сборки. Файл автономный (собран
-PyInstaller'ом), Python ставить не нужно.
+**macOS**: готовый **`.dmg`-установщик** с GUI (GTK4 + libadwaita, ffmpeg
+внутрь не входит) собирается автоматически в CI на каждый релизный тег —
+скачать можно во вкладке [Releases][releases], либо для последнего коммита
+в `main` — во вкладке [Actions][actions] → workflow "macOS build" →
+артефакты сборки. Откройте `.dmg` и перетащите `AnimeDlp.app` в
+`Applications`.
 
 [releases]: https://github.com/alttux/anime-dlp/releases
-[actions]: https://github.com/alttux/anime-dlp/actions/workflows/desktop-build.yml
-
-```powershell
-# Windows (PowerShell)
-.\anime-dlp-windows-x86_64.exe -d "$HOME\Videos\Anime"
-```
-
-```bash
-# macOS
-chmod +x anime-dlp-macos-arm64
-./anime-dlp-macos-arm64 -d ~/Movies/Anime
-```
+[actions]: https://github.com/alttux/anime-dlp/actions/workflows/macos-build.yml
 
 > Для серий, которые Kodik отдаёт только через HLS, нужен **ffmpeg** в
-> `PATH`: на Windows — `winget install ffmpeg` или скачать с
-> [ffmpeg.org](https://ffmpeg.org/download.html), на macOS —
-> `brew install ffmpeg`. Без него скачаются только серии с обычной
-> Range-раздачей.
+> `PATH` — поставьте его отдельно: `brew install ffmpeg`. Без него скачаются
+> только серии с обычной Range-раздачей.
 >
-> Токен Kodik и папка загрузок по умолчанию (если не указан `-d`) для этого
-> exe — `%APPDATA%\anime-dlp` и `~\Downloads` на Windows,
-> `~/Library/Application Support/anime-dlp` и `~/Downloads` на macOS.
+> Токен Kodik и папка загрузок по умолчанию (если не указана своя) —
+> `~/Library/Application Support/anime-dlp` и `~/Downloads`.
 >
 > Флаг `-i/--interface` (привязка к сетевому интерфейсу) работает только в
-> Linux — на Windows/macOS программа сообщит об этом и завершится с ошибкой,
-> если флаг передан; остальной функционал не затронут.
+> Linux — на macOS программа сообщит об этом и завершится с ошибкой, если
+> флаг передан; остальной функционал не затронут.
+
+Собрать `.dmg` самостоятельно из исходников можно скриптами в
+`packaging/macos/` (`make_icns.sh` + `build.sh`) — именно они используются в
+CI, см. `.github/workflows/macos-build.yml`.
 
 **Графический интерфейс (GUI)** собирается из исходников, так как готовых
 pip-колёс GTK4/libadwaita для Windows и macOS нет — их ставят через
@@ -209,8 +195,7 @@ pip-колёс GTK4/libadwaita для Windows и macOS нет — их став�
    anime-dlp --gui
    ```
 
-Именно эти шаги проверяются в CI (джоба `gui-windows`), так что если у вас
-что-то не совпадает — сверьтесь с `.github/workflows/desktop-build.yml`.
+Подробности и решение проблем — в [WINDOWS.md](WINDOWS.md).
 </details>
 
 <details>
@@ -237,7 +222,8 @@ pip-колёс GTK4/libadwaita для Windows и macOS нет — их став�
    anime-dlp --gui
    ```
 
-Эти же шаги — джоба `gui-macos` в CI.
+Готовый `.dmg` (без сборки из исходников) можно скачать во вкладке
+[Releases][releases] — см. выше.
 </details>
 
 ### Сборка пакета
