@@ -1,0 +1,66 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Windows CLI (.exe)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install anime-dlp and PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install pyinstaller
+
+      - name: Determine artifact name
+        id: artifact-info
+        shell: bash
+        run: |
+          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          if [ -z "$VERSION" ]; then
+            VERSION=$(date +%Y%m%d)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "asset=anime-dlp-windows-x86_64-${VERSION}.exe" >> "$GITHUB_OUTPUT"
+
+      - name: Build standalone executable
+        run: |
+          pyinstaller --onefile --name anime-dlp `
+            --collect-all anime_parsers_ru `
+            packaging/pyinstaller_entry.py
+
+      - name: Smoke test
+        run: .\dist\anime-dlp.exe --help
+
+      - name: Rename artifact
+        shell: bash
+        run: mv dist/anime-dlp.exe "${{ steps.artifact-info.outputs.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact-info.outputs.asset }}
+          path: ${{ steps.artifact-info.outputs.asset }}
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.artifact-info.outputs.asset }}

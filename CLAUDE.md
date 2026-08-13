@@ -129,6 +129,7 @@ anime-dlp/
 ├── screenshots/                   # Скриншоты GUI для README
 ├── .github/workflows/
 │   ├── flatpak.yml                # CI: сборка Flatpak (Linux)
+│   ├── windows-build.yml          # CI: сборка Windows CLI .exe (PyInstaller, без GUI)
 │   └── macos-build.yml            # CI: сборка macOS .app + .dmg-установщика (GUI, Homebrew + PyInstaller)
 ├── build.sh                       # Сборка Python-пакета (wheel/sdist) + бамп версии
 ├── pyproject.toml                 # Метаданные и зависимости пакета
@@ -162,8 +163,12 @@ anime-dlp/
   `packaging/macos_gui_entry.py`, GUI запускается напрямую, без CLI-диалога),
   упаковывает в `.dmg` через `create-dmg` и прикрепляет его к GitHub Release
   при пуше тега `v*.*.*`.
-- Windows: автоматической сборки в CI нет — CLI и GUI собираются/запускаются
-  из исходников вручную, подробная инструкция в `WINDOWS.md`.
+- Windows (GitHub Actions, `.github/workflows/windows-build.yml`): собирает
+  автономный CLI-исполняемый файл (`.exe`, без GUI) через PyInstaller
+  (`packaging/pyinstaller_entry.py`) и прикрепляет его к GitHub Release при
+  пуше тега `v*.*.*`. GUI под Windows автоматически не собирается (готовых
+  pip-колёс GTK4/libadwaita нет) — запускается из исходников вручную через
+  MSYS2, подробная инструкция в `WINDOWS.md`.
 - Flatpak — только для Linux (сборка через `flatpak.yml`). Готовых
   GTK4-пакетов для Windows/macOS в pip нет — их устанавливают через
   системный пакетный менеджер платформы (см. README → «Windows и macOS»).
