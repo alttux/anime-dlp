@@ -1,11 +1,12 @@
 name: Create Release
 
-# Автоматически создаёт релиз, когда версия в pyproject.toml меняется
-# (например, после локального ./build.sh / ./flatpak/build.sh, которые
-# бампают patch-версию — см. scripts/bump_version.py) и попадает в main:
-# создаёт и пушит тег v<версия>, затем последовательно запускает сборки
-# Windows/macOS/Flatpak как reusable workflows, которые прикрепляют готовые
-# файлы к автоматически созданному GitHub Release для этого тега.
+# Автоматически создаёт релиз на GitHub, когда версия в pyproject.toml
+# меняется (например, после локального ./build.sh / ./flatpak/build.sh,
+# которые бампают patch-версию — см. scripts/bump_version.py) и попадает в
+# main: создаёт и пушит тег v<версия>, сразу создаёт под него GitHub
+# Release (`gh release create`, с автоматически сгенерированными release
+# notes), затем запускает сборки Windows/macOS/Flatpak как reusable
+# workflows — они прикрепляют собранные файлы к уже существующему релизу.
 
 on:
   push:
@@ -53,6 +54,15 @@ jobs:
 
           echo "should_release=true" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.check.outputs.tag }}" \
+            --title "${{ steps.check.outputs.tag }}" \
+            --generate-notes
 
   windows:
     name: Windows artifacts
