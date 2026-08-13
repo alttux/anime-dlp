@@ -10,7 +10,14 @@ from anime_dlp.logger import ConsoleLogger
 
 
 def main():
+    # Консоль Windows по умолчанию использует однобайтовую кодовую страницу
+    # (cp1252/cp1251 и т.п.), в которой нет кириллицы — без этого вывод
+    # текста программы (справка, подсказки, ошибки) падает с
+    # UnicodeEncodeError. На Linux/macOS stdout уже в UTF-8, reconfigure
+    # здесь безвреден.
     sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(description="Anime Downloader")
     parser.add_argument(
