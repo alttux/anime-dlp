@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag_name:
+        description: "Тег релиза, к которому нужно прикрепить собранные файлы"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -120,9 +126,10 @@ jobs:
           path: dist/${{ steps.artifact-info.outputs.dmg }}
 
       - name: Attach DMG to release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag_name != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name }}
           files: |
             dist/${{ steps.artifact-info.outputs.dmg }}
             dist/${{ steps.artifact-info.outputs.dmg }}.sha256

@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag_name:
+        description: "Тег релиза, к которому нужно прикрепить собранный файл"
+        required: false
+        type: string
 
 jobs:
   flatpak:
@@ -28,7 +34,8 @@ jobs:
           cache-key: flatpak-builder-${{ github.sha }}
 
       - name: Attach bundle to release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag_name != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name }}
           files: anime-dlp.flatpak

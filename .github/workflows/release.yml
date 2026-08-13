@@ -1,0 +1,85 @@
+name: Create Release
+
+# Автоматически создаёт релиз, когда версия в pyproject.toml меняется
+# (например, после локального ./build.sh / ./flatpak/build.sh, которые
+# бампают patch-версию — см. scripts/bump_version.py) и попадает в main:
+# создаёт и пушит тег v<версия>, затем последовательно запускает сборки
+# Windows/macOS/Flatpak как reusable workflows, которые прикрепляют готовые
+# файлы к автоматически созданному GitHub Release для этого тега.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pyproject.toml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Tag new version
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version and tag if new
+        id: check
+        run: |
+          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "Не удалось прочитать version из pyproject.toml" >&2
+            exit 1
+          fi
+          TAG="v${VERSION}"
+
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Тег $TAG уже существует — релиз не нужен"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Создаю тег $TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Windows artifacts
+    needs: tag
+    if: needs.tag.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      tag_name: ${{ needs.tag.outputs.tag }}
+
+  macos:
+    name: macOS artifacts
+    needs: tag
+    if: needs.tag.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/macos-build.yml
+    with:
+      tag_name: ${{ needs.tag.outputs.tag }}
+
+  flatpak:
+    name: Flatpak artifact
+    needs: tag
+    if: needs.tag.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/flatpak.yml
+    with:
+      tag_name: ${{ needs.tag.outputs.tag }}

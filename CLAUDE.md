@@ -170,6 +170,14 @@ anime-dlp/
 через Range-запросы, скачивание через HLS-поток при помощи `ffmpeg`.
 
 # Сборка и версионирование
+- Релизы создаются автоматически: `.github/workflows/release.yml` следит за
+  `pyproject.toml` в `main` и при каждом изменении версии сам создаёт и
+  пушит git-тег `v<версия>` (если такого тега ещё нет), затем вызывает
+  `windows-build.yml`, `macos-build.yml` и `flatpak.yml` как reusable
+  workflows (`workflow_call`, вход `tag_name`) — они собирают файлы и
+  прикрепляют их к автоматически созданному GitHub Release для этого тега.
+  Все три workflow по-прежнему запускаются и напрямую по пушу тега
+  `v*.*.*` (ручной `git tag` + `git push` тоже работает).
 - Python-пакет: `./build.sh` (или вручную `python3 -m build`) — собирает
   wheel/sdist в `dist/`.
 - Flatpak: `./flatpak/build.sh` — добавляет remote flathub, ставит

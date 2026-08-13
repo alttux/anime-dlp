@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag_name:
+        description: "Тег релиза, к которому нужно прикрепить собранные файлы"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -60,9 +66,10 @@ jobs:
           path: ${{ steps.artifact-info.outputs.asset }}
 
       - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag_name != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name }}
           files: ${{ steps.artifact-info.outputs.asset }}
 
   build-gui:
@@ -114,7 +121,8 @@ jobs:
           path: ${{ steps.artifact-info.outputs.asset }}
 
       - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag_name != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name }}
           files: ${{ steps.artifact-info.outputs.asset }}
