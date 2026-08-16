@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget, QTabBar, QVBoxLayout, QWidget
 
+from anime_dlp.gui.formatting import APP_TITLE
 from anime_dlp.gui.qt.catalog_tab import CatalogTab
 from anime_dlp.gui.qt.search_tab import SearchTab
 from anime_dlp.gui.qt.widgets import NavHeaderBar
@@ -14,7 +15,7 @@ class HomePage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        header = NavHeaderBar("Anime Downloader", show_back=False)
+        header = NavHeaderBar(APP_TITLE, show_back=False)
         outer.addWidget(header)
 
         # Qt не центрирует QTabBar по умолчанию — оборачиваем в строку со

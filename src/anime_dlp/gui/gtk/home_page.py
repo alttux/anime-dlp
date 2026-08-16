@@ -1,12 +1,13 @@
 from gi.repository import Adw, GObject
 
+from anime_dlp.gui.formatting import APP_TITLE
 from anime_dlp.gui.gtk.catalog_tab import CatalogTab
 from anime_dlp.gui.gtk.search_tab import SearchTab
 
 
 class HomePage(Adw.NavigationPage):
     def __init__(self, window):
-        super().__init__(title="Anime Downloader", tag="home")
+        super().__init__(title=APP_TITLE, tag="home")
         self.window = window
 
         toolbar_view = Adw.ToolbarView()
@@ -14,7 +15,7 @@ class HomePage(Adw.NavigationPage):
 
         self.view_stack = Adw.ViewStack()
         switcher_title = Adw.ViewSwitcherTitle(
-            stack=self.view_stack, title="Anime Downloader"
+            stack=self.view_stack, title=APP_TITLE
         )
         header.set_title_widget(switcher_title)
 

@@ -3,7 +3,6 @@ name: macOS build
 on:
   push:
     branches: [main]
-    tags: ["v*.*.*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -57,6 +56,25 @@ jobs:
           chmod +x packaging/macos/build.sh
           ./packaging/macos/build.sh
 
+      - name: Determine artifact names
+        id: artifact-info
+        run: |
+          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          if [ -z "$VERSION" ]; then
+            VERSION=$(date +%Y%m%d)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "dmg=AnimeDlp-macOS-${VERSION}-arm64.dmg" >> "$GITHUB_OUTPUT"
+
+      - name: Set app bundle version
+        run: |
+          VERSION="${{ steps.artifact-info.outputs.version }}"
+          PLIST="dist/AnimeDlp.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$PLIST"
+
       - name: Verify build outputs
         run: |
           echo "=== DEBUG: dist directory ==="
@@ -85,16 +103,6 @@ jobs:
           print('GTK', Gtk.get_major_version(), Gtk.get_minor_version())
           print('Adwaita', Adw.MAJOR_VERSION, Adw.MINOR_VERSION)
           "
-
-      - name: Determine artifact names
-        id: artifact-info
-        run: |
-          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
-          if [ -z "$VERSION" ]; then
-            VERSION=$(date +%Y%m%d)
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "dmg=AnimeDlp-macOS-${VERSION}-arm64.dmg" >> "$GITHUB_OUTPUT"
 
       - name: Create .dmg installer
         run: |

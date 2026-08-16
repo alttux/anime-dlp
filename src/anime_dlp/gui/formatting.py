@@ -1,5 +1,9 @@
 import time
 
+from anime_dlp import __version__
+
+APP_TITLE = f"Anime Downloader v{__version__}"
+
 
 def humanize_bytes(n: int) -> str:
     value = float(n)

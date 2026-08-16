@@ -102,7 +102,8 @@ Qt.
 ```
 anime-dlp/
 ├── src/anime_dlp/
-│   ├── main.py                  # Точка входа, разбор аргументов CLI (-d, --logging, --gui, -i)
+│   ├── __init__.py                # anime_dlp.__version__ (importlib.metadata)
+│   ├── main.py                  # Точка входа, разбор аргументов CLI (-d, --logging, --gui, -i, --version)
 │   ├── config.py                 # Пути (в т.ч. Flatpak-режим), заголовки запросов, число потоков
 │   ├── logger.py                 # Логирование вывода консоли в файл (--logging)
 │   ├── labels.py                  # Текстовые метки (типы тайтлов, статусы)
@@ -170,42 +171,68 @@ anime-dlp/
 через Range-запросы, скачивание через HLS-поток при помощи `ffmpeg`.
 
 # Сборка и версионирование
-- Релизы создаются автоматически: `.github/workflows/release.yml` следит за
-  `pyproject.toml` в `main` и при каждом изменении версии сам создаёт и
-  пушит git-тег `v<версия>` (если такого тега ещё нет), затем вызывает
-  `windows-build.yml`, `macos-build.yml` и `flatpak.yml` как reusable
-  workflows (`workflow_call`, вход `tag_name`) — они собирают файлы и
-  прикрепляют их к автоматически созданному GitHub Release для этого тега.
-  Все три workflow по-прежнему запускаются и напрямую по пушу тега
-  `v*.*.*` (ручной `git tag` + `git push` тоже работает).
+- Единый источник версии — поле `version` в `pyproject.toml`. Она читается
+  во время выполнения через `anime_dlp.__version__`
+  (`src/anime_dlp/__init__.py`, `importlib.metadata.version("anime-dlp")`,
+  с фолбэком `"0.0.0+unknown"` для запуска из неустановленных исходников) и
+  показывается пользователю: флагом `anime-dlp --version`/`-V`, а также в
+  заголовке окна GUI (`Anime Downloader vX.Y.Z`, оба бэкенда — см.
+  `gui/formatting.py:APP_TITLE`).
+- Версия увеличивается **автоматически и только в CI**, без ручных
+  действий разработчика: `.github/workflows/release.yml` при каждом пуше в
+  `main`, который затрагивает не только документацию (`paths-ignore`),
+  сам вызывает `scripts/bump_version.py` (увеличивает patch-версию в
+  `pyproject.toml` и синхронизирует её с последним `<release>` в
+  `data/io.github.alttux.AnimeDlp.metainfo.xml`), коммитит это изменение
+  от имени `github-actions[bot]` (с меткой `[auto-version]` в сообщении —
+  по ней же следующий запуск отличает свой бамп-коммит от обычного пуша и
+  не бампает версию повторно) и пушит обратно в `main`, затем создаёт и
+  пушит git-тег `v<версия>`, создаёт под него GitHub Release
+  (`gh release create`) и вызывает `windows-build.yml`, `macos-build.yml` и
+  `flatpak.yml` как reusable workflows (`workflow_call`, вход `tag_name`) —
+  они собирают файлы (со встроенной версией — см. ниже) и прикрепляют их к
+  этому релизу. Три build-workflow'а больше НЕ запускаются напрямую по
+  пушу тега (раньше запускались и так — это приводило к двойной сборке на
+  каждый релиз), только через `workflow_call` из `release.yml` — но
+  по-прежнему запускаются как обычный CI (без прикрепления к релизу) на
+  каждый пуш/PR в `main`, чтобы проверять, что всё собирается.
+- Локальные скрипты сборки (`./build.sh`, `./flatpak/build.sh`) версию
+  **не трогают** — собирают с той версией, что уже закоммичена в
+  `pyproject.toml`, чтобы не расходиться с CI и не плодить конфликты в
+  этой строке между машинами разработчиков.
 - Python-пакет: `./build.sh` (или вручную `python3 -m build`) — собирает
   wheel/sdist в `dist/`.
 - Flatpak: `./flatpak/build.sh` — добавляет remote flathub, ставит
-  рантайм/SDK при отсутствии, собирает и упаковывает `anime-dlp.flatpak` в
-  корень проекта.
-- Оба скрипта перед сборкой вызывают `scripts/bump_version.py`, который
-  увеличивает patch-версию в `pyproject.toml` на 1 и синхронизирует её с
-  последним `<release>` в `data/io.github.alttux.AnimeDlp.metainfo.xml` —
-  версия общая для wheel/sdist и Flatpak-пакета и растёт при каждой сборке
-  любого из них.
+  рантайм/SDK при отсутствии, собирает и упаковывает
+  `anime-dlp-<версия>.flatpak` в корень проекта.
 - macOS (GitHub Actions, `.github/workflows/macos-build.yml`, `runs-on:
   macos-14`, только `aarch64`): ставит GTK4/libadwaita/PyGObject через
   Homebrew, генерирует иконку (`packaging/macos/make_icns.sh`), собирает
   `dist/AnimeDlp.app` через PyInstaller (`packaging/macos/build.sh` +
-  `packaging/macos_gui_entry.py`, GUI запускается напрямую, без CLI-диалога),
-  упаковывает в `.dmg` через `create-dmg` и прикрепляет его к GitHub Release
-  при пуше тега `v*.*.*`.
-- Windows (GitHub Actions, `.github/workflows/windows-build.yml`, два job'а):
-  `build` собирает автономный CLI-исполняемый файл (`.exe`, без GUI) через
-  PyInstaller (`packaging/pyinstaller_entry.py`); `build-gui` собирает
-  автономный GUI-исполняемый файл на **PyQt6** (`.exe`, `--windowed`) через
-  PyInstaller (`packaging/windows_gui_entry.py`, иконка
-  `packaging/windows/AnimeDlp.ico`) — в отличие от GTK4/libadwaita, у PyQt6
-  есть готовые pip-колёса под Windows, поэтому сборка полностью
-  автоматическая, без MSYS2. Оба `.exe` прикрепляются к GitHub Release при
-  пуше тега `v*.*.*`. GTK-версию GUI на Windows всё ещё можно запустить из
-  исходников вручную через MSYS2 (`ANIME_DLP_GUI_BACKEND=gtk`, см.
-  `WINDOWS.md`) — например, для разработки самого GTK-бэкенда.
+  `packaging/macos_gui_entry.py`, GUI запускается напрямую, без
+  CLI-диалога, флаг `--copy-metadata anime-dlp` нужен, чтобы
+  `importlib.metadata` работал и внутри собранного бандла), затем шаг
+  «Set app bundle version» прописывает `CFBundleShortVersionString`/
+  `CFBundleVersion` в `Info.plist` через `PlistBuddy`, упаковывает в `.dmg`
+  через `create-dmg` и прикрепляет его к GitHub Release при вызове из
+  `release.yml`.
+- Windows (GitHub Actions, `.github/workflows/windows-build.yml`, два
+  job'а): `build` собирает автономный CLI-исполняемый файл (`.exe`, без
+  GUI) через PyInstaller (`packaging/pyinstaller_entry.py`); `build-gui`
+  собирает автономный GUI-исполняемый файл на **PyQt6** (`.exe`,
+  `--windowed`) через PyInstaller (`packaging/windows_gui_entry.py`,
+  иконка `packaging/windows/AnimeDlp.ico`) — в отличие от GTK4/libadwaita,
+  у PyQt6 есть готовые pip-колёса под Windows, поэтому сборка полностью
+  автоматическая, без MSYS2. Оба вызова PyInstaller получают
+  `--copy-metadata anime-dlp` (тот же смысл, что и на macOS) и
+  `--version-file` со сгенерированным на лету VSVersionInfo-ресурсом (шаг
+  «Generate Windows version resource» — вручную собирает `.txt` в формате
+  `PyInstaller.utils.win32.versioninfo`, без сторонних пакетов), поэтому у
+  готовых `.exe` версия видна и в свойствах файла в Проводнике. Оба `.exe`
+  прикрепляются к GitHub Release при вызове из `release.yml`. GTK-версию
+  GUI на Windows всё ещё можно запустить из исходников вручную через MSYS2
+  (`ANIME_DLP_GUI_BACKEND=gtk`, см. `WINDOWS.md`) — например, для
+  разработки самого GTK-бэкенда.
 - Flatpak — только для Linux (сборка через `flatpak.yml`). Готовых
   GTK4-пакетов для macOS в pip нет — их устанавливают через Homebrew (см.
   README → «Windows и macOS»).

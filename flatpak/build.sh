@@ -18,9 +18,6 @@ for cmd in flatpak flatpak-builder; do
     fi
 done
 
-echo "==> Увеличение версии пакета"
-python3 "$SCRIPT_DIR/../scripts/bump_version.py"
-
 echo "==> Проверка remote flathub"
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 

@@ -1,18 +1,31 @@
 name: Create Release
 
-# Автоматически создаёт релиз на GitHub, когда версия в pyproject.toml
-# меняется (например, после локального ./build.sh / ./flatpak/build.sh,
-# которые бампают patch-версию — см. scripts/bump_version.py) и попадает в
-# main: создаёт и пушит тег v<версия>, сразу создаёт под него GitHub
-# Release (`gh release create`, с автоматически сгенерированными release
-# notes), затем запускает сборки Windows/macOS/Flatpak как reusable
-# workflows — они прикрепляют собранные файлы к уже существующему релизу.
+# Единая точка версионирования проекта. При каждом пуше в main, который
+# затрагивает код (не только доки), этот workflow сам увеличивает
+# patch-версию в pyproject.toml (и синхронизированном
+# data/io.github.alttux.AnimeDlp.metainfo.xml) через scripts/bump_version.py,
+# коммитит и пушит это изменение обратно в main от имени github-actions[bot]
+# — версия больше нигде вручную не бампается (ни разработчиком, ни
+# build.sh/flatpak/build.sh). Затем создаёт и пушит тег v<версия>, создаёт
+# под него GitHub Release (`gh release create`, с автоматически
+# сгенерированными release notes) и запускает сборки Windows/macOS/Flatpak
+# как reusable workflows — они прикрепляют собранные файлы (со встроенной
+# версией — см. windows-build.yml/macos-build.yml) к уже существующему
+# релизу.
+#
+# Пуш от GITHUB_TOKEN не запускает workflow'ы повторно (стандартная защита
+# GitHub Actions от бесконечных циклов), но на случай нестандартных
+# настроек репозитория есть и собственная защита: если последний коммит уже
+# содержит метку [auto-version], бамп версии пропускается.
 
 on:
   push:
     branches: [main]
-    paths:
-      - pyproject.toml
+    paths-ignore:
+      - "**.md"
+      - "**.MD"
+      - "LICENSE.txt"
+      - "screenshots/**"
   workflow_dispatch:
 
 permissions:
@@ -20,19 +33,32 @@ permissions:
 
 jobs:
   tag:
-    name: Tag new version
+    name: Bump version and tag
     runs-on: ubuntu-latest
     outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
-      tag: ${{ steps.check.outputs.tag }}
+      should_release: ${{ steps.bump.outputs.should_release }}
+      tag: ${{ steps.bump.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Determine version and tag if new
-        id: check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bump version and tag if this isn't our own bump commit
+        id: bump
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          if git log -1 --pretty=%B | grep -q '\[auto-version\]'; then
+            echo "Последний коммит уже является автоматическим бампом версии — пропускаю"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          python3 scripts/bump_version.py
           VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
           if [ -z "$VERSION" ]; then
             echo "Не удалось прочитать version из pyproject.toml" >&2
@@ -46,9 +72,12 @@ jobs:
             exit 0
           fi
 
-          echo "Создаю тег $TAG"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: bump version to ${VERSION} [auto-version]"
+          git push origin HEAD:main
+
+          echo "Создаю тег $TAG"
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
 
@@ -56,12 +85,12 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.should_release == 'true'
+        if: steps.bump.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.check.outputs.tag }}" \
-            --title "${{ steps.check.outputs.tag }}" \
+          gh release create "${{ steps.bump.outputs.tag }}" \
+            --title "${{ steps.bump.outputs.tag }}" \
             --generate-notes
 
   windows:

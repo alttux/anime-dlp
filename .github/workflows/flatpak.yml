@@ -3,7 +3,6 @@ name: Flatpak
 on:
   push:
     branches: [main]
-    tags: ["v*.*.*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -26,16 +25,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Determine artifact name
+        id: artifact-info
+        run: |
+          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          if [ -z "$VERSION" ]; then
+            VERSION=$(date +%Y%m%d)
+          fi
+          echo "bundle=anime-dlp-${VERSION}.flatpak" >> "$GITHUB_OUTPUT"
+
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         id: flatpak-builder
         with:
-          bundle: anime-dlp.flatpak
+          bundle: ${{ steps.artifact-info.outputs.bundle }}
           manifest-path: flatpak/io.github.alttux.AnimeDlp.yml
           cache-key: flatpak-builder-${{ github.sha }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact-info.outputs.bundle }}
+          path: ${{ steps.artifact-info.outputs.bundle }}
 
       - name: Attach bundle to release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.tag_name != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag_name }}
-          files: anime-dlp.flatpak
+          files: ${{ steps.artifact-info.outputs.bundle }}

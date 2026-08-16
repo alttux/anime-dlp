@@ -23,6 +23,7 @@ pyinstaller \
   --name "$APP_NAME" \
   --icon packaging/macos/AnimeDlp.icns \
   --collect-all anime_parsers_ru \
+  --copy-metadata anime-dlp \
   --hidden-import gi \
   --add-data "$GI_TYPELIB_PATH:gi_typelibs" \
   --add-data "$BREW_PREFIX/share/glib-2.0/schemas:share/glib-2.0/schemas" \

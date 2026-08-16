@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget
 
+from anime_dlp.gui.formatting import APP_TITLE
 from anime_dlp.gui.qt.widgets import ToastOverlay
 
 
@@ -11,7 +12,7 @@ class AnimeDlpWindow(QMainWindow):
         self.download_dir = download_dir
 
         self.resize(720, 560)
-        self.setWindowTitle("Anime Downloader")
+        self.setWindowTitle(APP_TITLE)
 
         self.nav_stack = QStackedWidget()
 

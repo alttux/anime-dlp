@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Собирает Python-пакет (wheel + sdist) в dist/. Перед сборкой увеличивает
-# patch-версию в pyproject.toml на 1 (см. scripts/bump_version.py), чтобы
-# каждая сборка получала новую версию.
+# Собирает Python-пакет (wheel + sdist) в dist/ с текущей версией из
+# pyproject.toml. Версия увеличивается автоматически только в CI при пуше
+# в main (.github/workflows/release.yml, scripts/bump_version.py) — этот
+# скрипт версию не трогает, чтобы локальные сборки не расходились с тем,
+# что уже закоммичено.
 
 set -euo pipefail
 
@@ -12,8 +14,6 @@ if ! python3 -c "import build" >/dev/null 2>&1; then
     echo "Ошибка: не найден модуль 'build'. Установите его: python3 -m pip install --upgrade build" >&2
     exit 1
 fi
-
-python3 scripts/bump_version.py
 
 python3 -m build
 

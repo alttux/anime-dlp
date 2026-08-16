@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Увеличивает patch-версию проекта на 1 перед сборкой.
+"""Увеличивает patch-версию проекта на 1.
 
 Меняет version в pyproject.toml и синхронизирует с ней версию/дату самого
-свежего <release> в data/io.github.alttux.AnimeDlp.metainfo.xml. Вызывается
-из build.sh и flatpak/build.sh перед сборкой пакета.
+свежего <release> в data/io.github.alttux.AnimeDlp.metainfo.xml — это
+единственные два места, где версия хранится статически. Вызывается
+автоматически из .github/workflows/release.yml при каждом пуше в main
+(см. CLAUDE.md → «Сборка и версионирование»); build.sh/flatpak/build.sh
+версию больше не бампают, чтобы не расходиться с CI.
 """
 
 import re
