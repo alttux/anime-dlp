@@ -9,27 +9,20 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from anime_dlp.gui.qt.widgets import ActionRow, NavHeaderBar, StatusPage
+from anime_dlp.gui.qt.widgets import ActionRow, StatusPage
 from anime_dlp.gui.qt.workers import SearchWorker
 from anime_dlp.labels import TYPE_MAP
 
 DEBOUNCE_MS = 300
 
 
-class SearchPage(QWidget):
+class SearchTab(QWidget):
     def __init__(self, window):
         super().__init__()
         self.window = window
         self._worker: SearchWorker | None = None
 
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        outer.addWidget(NavHeaderBar("Anime Downloader", show_back=False))
-
-        body = QWidget()
-        body_layout = QVBoxLayout(body)
+        body_layout = QVBoxLayout(self)
         body_layout.setContentsMargins(12, 12, 12, 12)
         body_layout.setSpacing(12)
 
@@ -78,7 +71,10 @@ class SearchPage(QWidget):
         self.stack.setCurrentWidget(self.empty_page)
         body_layout.addWidget(self.stack, 1)
 
-        outer.addWidget(body, 1)
+    def build_interface_button(self):
+        # Привязка к сетевому интерфейсу — Linux-only фича, в Qt-бэкенде не
+        # показывается (core.network.SUPPORTED всегда False на Windows).
+        return None
 
     def _on_text_changed(self, text: str):
         self._debounce_timer.stop()

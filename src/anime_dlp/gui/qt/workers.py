@@ -7,7 +7,13 @@ from pathlib import Path
 import requests
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from anime_dlp.core.anime_service import get_anime_info, get_download_link, search_anime
+from anime_dlp.core.anime_service import (
+    get_anime_info,
+    get_download_link,
+    get_popular_anime,
+    search_anime,
+)
+from anime_dlp.core.cache import fetch_image_cached
 from anime_dlp.core.downloader import download_episode
 from anime_dlp.filenames import sanitize_filename
 
@@ -55,14 +61,29 @@ class PosterWorker(QThread):
 
     def run(self):
         try:
-            response = requests.get(self.url, timeout=10)
-            response.raise_for_status()
-            data = response.content
+            data = fetch_image_cached(self.url, timeout=10)
             error = ""
         except requests.RequestException as exc:
             data = b""
             error = str(exc)
         self.finished_poster.emit(data, error)
+
+
+class PopularWorker(QThread):
+    finished_popular = pyqtSignal(list, str, bool, str)
+
+    def __init__(self, cursor: str | None, limit: int, parent=None):
+        super().__init__(parent)
+        self.cursor = cursor
+        self.limit = limit
+
+    def run(self):
+        try:
+            items, next_cursor = get_popular_anime(cursor=self.cursor, limit=self.limit)
+            error = ""
+        except Exception as exc:
+            items, next_cursor, error = [], None, str(exc)
+        self.finished_popular.emit(items, next_cursor or "", bool(next_cursor), error)
 
 
 class DownloadWorker(QThread):
