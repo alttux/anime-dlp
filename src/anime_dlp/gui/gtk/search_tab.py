@@ -9,32 +9,28 @@ from anime_dlp.labels import TYPE_MAP
 DEBOUNCE_MS = 300
 
 
-class SearchPage(Adw.NavigationPage):
+class SearchTab(Gtk.Box):
     def __init__(self, window):
-        super().__init__(title="Anime Downloader", tag="search")
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.window = window
         self._debounce_id = None
+        self.interface_button = None
 
-        toolbar_view = Adw.ToolbarView()
-        header = Adw.HeaderBar()
         if network.SUPPORTED:
             self.interface_button = Gtk.MenuButton(
                 icon_name="network-wired-symbolic",
                 tooltip_text=self._interface_tooltip(),
             )
             self._build_interface_popover()
-            header.pack_end(self.interface_button)
-        toolbar_view.add_top_bar(header)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        box.set_margin_top(12)
-        box.set_margin_bottom(12)
-        box.set_margin_start(12)
-        box.set_margin_end(12)
+        self.set_margin_top(12)
+        self.set_margin_bottom(12)
+        self.set_margin_start(12)
+        self.set_margin_end(12)
 
         self.search_entry = Gtk.SearchEntry(placeholder_text="Введите название аниме")
         self.search_entry.connect("search-changed", self._on_search_changed)
-        box.append(self.search_entry)
+        self.append(self.search_entry)
 
         self.stack = Gtk.Stack()
 
@@ -63,10 +59,10 @@ class SearchPage(Adw.NavigationPage):
         self.stack.add_named(scrolled, "results")
 
         self.stack.set_visible_child_name("empty")
-        box.append(self.stack)
+        self.append(self.stack)
 
-        toolbar_view.set_content(box)
-        self.set_child(toolbar_view)
+    def build_interface_button(self) -> Gtk.MenuButton | None:
+        return self.interface_button
 
     def _on_search_changed(self, entry):
         if self._debounce_id is not None:

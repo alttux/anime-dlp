@@ -5,6 +5,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 
 from anime_dlp.core.anime_info import extract_anime_info, has_any_info
 from anime_dlp.core.anime_service import get_anime_info
+from anime_dlp.core.cache import fetch_image_cached
 
 
 class DetailsPage(Adw.NavigationPage):
@@ -72,9 +73,7 @@ class DetailsPage(Adw.NavigationPage):
 
     def _fetch_poster_worker(self, poster_url: str):
         try:
-            response = requests.get(poster_url, timeout=10)
-            response.raise_for_status()
-            data = response.content
+            data = fetch_image_cached(poster_url, timeout=10)
         except requests.RequestException:
             return
         GLib.idle_add(self._on_poster_loaded, data)
