@@ -3,10 +3,12 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 from anime_dlp.core.anime_info import extract_anime_info
+from anime_dlp.gui.qt.pixmap_utils import round_pixmap
 from anime_dlp.gui.qt.workers import PosterWorker
 
 _WIDTH = 140
 _HEIGHT = 200
+_RADIUS = 8
 
 
 class CoverCard(QFrame):
@@ -27,7 +29,7 @@ class CoverCard(QFrame):
         self.poster_label.setScaledContents(False)
         self.poster_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.poster_label.setStyleSheet(
-            "background: palette(alternate-base); border-radius: 6px;"
+            f"background: palette(alternate-base); border-radius: {_RADIUS}px;"
         )
         layout.addWidget(self.poster_label)
 
@@ -61,4 +63,4 @@ class CoverCard(QFrame):
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
-        self.poster_label.setPixmap(pixmap)
+        self.poster_label.setPixmap(round_pixmap(pixmap, radius=_RADIUS))

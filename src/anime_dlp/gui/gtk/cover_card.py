@@ -20,6 +20,8 @@ class CoverCard(Gtk.Button):
         self.picture = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, can_shrink=True)
         self.picture.set_size_request(_WIDTH, _HEIGHT)
         self.picture.add_css_class("card")
+        self.picture.add_css_class("rounded-poster")
+        self.picture.set_overflow(Gtk.Overflow.HIDDEN)
         box.append(self.picture)
 
         title_label = Gtk.Label(

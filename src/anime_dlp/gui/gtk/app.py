@@ -26,6 +26,17 @@ flowboxchild:selected {
     box-shadow: none;
     outline: none;
 }
+
+.rounded-poster {
+    border-radius: 12px;
+}
+
+.pill-badge {
+    background-color: alpha(currentColor, 0.1);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 0.9em;
+}
 """
 
 
