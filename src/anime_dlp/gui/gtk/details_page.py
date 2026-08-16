@@ -118,10 +118,6 @@ class DetailsPage(Adw.NavigationPage):
 
         self.form_box.append(self._build_header(info))
 
-        key_value_block = self._build_key_value_block(info)
-        if key_value_block is not None:
-            self.form_box.append(key_value_block)
-
         if info.description:
             description_label = Gtk.Label(
                 label=info.description,
@@ -185,6 +181,10 @@ class DetailsPage(Adw.NavigationPage):
         pills = self._build_genre_pills(info.genres)
         if pills is not None:
             text_box.append(pills)
+
+        key_value_block = self._build_key_value_block(info)
+        if key_value_block is not None:
+            text_box.append(key_value_block)
 
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18, hexpand=True)
         header_box.append(self.poster_picture)

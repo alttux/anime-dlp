@@ -171,10 +171,6 @@ class DetailsPage(QWidget):
         if not self.poster_label.pixmap().isNull():
             self.poster_label.setVisible(True)
 
-        key_value_widget = self._build_key_value_grid(info)
-        if key_value_widget is not None:
-            self.form_box.addWidget(key_value_widget)
-
         if info.description:
             description_label = QLabel(info.description)
             description_label.setWordWrap(True)
@@ -220,6 +216,11 @@ class DetailsPage(QWidget):
         pills = self._build_genre_pills(info.genres)
         if pills is not None:
             text_box.addWidget(pills)
+
+        key_value_widget = self._build_key_value_grid(info)
+        if key_value_widget is not None:
+            text_box.addWidget(key_value_widget)
+
         text_box.addStretch(1)
 
         header_row = QHBoxLayout()
