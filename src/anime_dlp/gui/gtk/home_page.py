@@ -1,4 +1,4 @@
-from gi.repository import Adw
+from gi.repository import Adw, GObject
 
 from anime_dlp.gui.gtk.catalog_tab import CatalogTab
 from anime_dlp.gui.gtk.search_tab import SearchTab
@@ -31,7 +31,18 @@ class HomePage(Adw.NavigationPage):
         search_page = self.view_stack.add_titled(self.search_tab, "search", "Поиск")
         search_page.set_icon_name("system-search-symbolic")
 
-        switcher_bar = Adw.ViewSwitcherBar(stack=self.view_stack, reveal=True)
+        # ViewSwitcherTitle показывает переключатель вкладок прямо в
+        # заголовке, только пока туда помещается (title-visible=False); при
+        # сужении окна он схлопывается до простого заголовка (title-visible
+        # =True), и тогда нужно показать нижнюю панель-переключатель —
+        # иначе обе показываются одновременно.
+        switcher_bar = Adw.ViewSwitcherBar(stack=self.view_stack)
+        switcher_title.bind_property(
+            "title-visible",
+            switcher_bar,
+            "reveal",
+            GObject.BindingFlags.SYNC_CREATE,
+        )
         toolbar_view.add_bottom_bar(switcher_bar)
 
         toolbar_view.set_content(self.view_stack)
