@@ -1,10 +1,31 @@
-from anime_parsers_ru import KodikParser
+import json
 
+from anime_parsers_ru import KodikList, KodikParser
+from anime_parsers_ru.api_kodik import Api
+
+from anime_dlp.core import cache
 from anime_dlp.core.token_manager import load_token, save_token
 
 
 def _clean_surrogates(text: str) -> str:
     return "".join(c if not "\uD800" <= c <= "\uDFFF" else "?" for c in text)
+
+
+def _dedupe_by_anime(items: list[dict]) -> list[dict]:
+    """Kodik часто отдаёт несколько записей (разные переводы/источники) для
+    одного и того же аниме — оставляем по одной записи на shikimori_id/
+    kinopoisk_id/imdb_id."""
+    seen = {}
+    for item in items:
+        key = (
+            item.get("shikimori_id")
+            or item.get("kinopoisk_id")
+            or item.get("imdb_id")
+            or item["link"]
+        )
+        if key not in seen:
+            seen[key] = item
+    return list(seen.values())
 
 
 def _get_parser() -> KodikParser:
@@ -17,6 +38,11 @@ def _get_parser() -> KodikParser:
 
 def search_anime(title: str) -> list[dict]:
     title = _clean_surrogates(title)
+    cache_key = f"search:{title.strip().lower()}"
+    cached = cache.get_cached_json(cache_key)
+    if cached is not None:
+        return cached
+
     parser = _get_parser()
     results = parser.search(
         title=title,
@@ -24,22 +50,83 @@ def search_anime(title: str) -> list[dict]:
         only_anime=True,
         strict=False,
     )
-    seen = {}
-    for item in results:
-        key = (
-            item.get("shikimori_id")
-            or item.get("kinopoisk_id")
-            or item.get("imdb_id")
-            or item["link"]
-        )
-        if key not in seen:
-            seen[key] = item
-    return list(seen.values())
+    deduped = _dedupe_by_anime(results)
+    cache.store_json(cache_key, deduped)
+    return deduped
 
 
 def get_anime_info(shikimori_id: str) -> dict:
+    cache_key = f"info:{shikimori_id}"
+    cached = cache.get_cached_json(cache_key)
+    if cached is not None:
+        return cached
+
     parser = _get_parser()
-    return parser.get_info(id=shikimori_id, id_type="shikimori")
+    info = parser.get_info(id=shikimori_id, id_type="shikimori")
+    cache.store_json(cache_key, info)
+    return info
+
+
+_POPULAR_PAGE_LIMIT = 100  # максимум, который отдаёт Kodik API за один запрос
+
+
+def get_popular_anime(
+    cursor: str | None = None, limit: int = 10
+) -> tuple[list[dict], str | None]:
+    """Возвращает (items, next_cursor). Чтобы получить следующую страницу
+    ("Прогрузить ещё"), передайте next_cursor из предыдущего вызова обратно
+    как cursor.
+
+    Kodik отдаёт список отсортированным по рейтингу, но одному аниме может
+    соответствовать много подряд идущих записей (разные переводы/источники),
+    поэтому сырые страницы буферизуются и дедуплицируются, пока не наберётся
+    нужное количество уникальных тайтлов — иначе "Прогрузить ещё" почти не
+    добавляло бы новых обложек. cursor — непрозрачная JSON-строка с остатком
+    буфера и ссылкой на следующую сырую страницу.
+    """
+    cache_key = f"popular:{cursor or 'first'}:{limit}"
+    cached = cache.get_cached_json(cache_key)
+    if cached is not None:
+        return cached["items"], cached["next_cursor"]
+
+    if cursor:
+        state = json.loads(cursor)
+        link: str | None = state.get("link")
+        buffer: list[dict] = state.get("buffer", [])
+        made_initial_request = True
+    else:
+        link = None
+        buffer = []
+        made_initial_request = False
+
+    parser = _get_parser()
+    unique = _dedupe_by_anime(buffer)
+    while len(unique) < limit:
+        query = KodikList(token=parser.TOKEN)
+        if link is not None:
+            raw = query.api_request(link=link)
+        elif not made_initial_request:
+            raw = (
+                query.anime_status("released")
+                .sort(Api.Sort.shikimori_rating)
+                .order(Api.Order.desc)
+                .limit(_POPULAR_PAGE_LIMIT)
+                .with_material_data(True)
+                .execute(return_json=True)
+            )
+            made_initial_request = True
+        else:
+            break  # больше сырых страниц нет
+        buffer.extend(raw.get("results", []))
+        unique = _dedupe_by_anime(buffer)
+        link = raw.get("next_page")
+
+    items = unique[:limit]
+    leftover = unique[limit:]
+    next_cursor = json.dumps({"link": link, "buffer": leftover}) if (leftover or link) else None
+
+    cache.store_json(cache_key, {"items": items, "next_cursor": next_cursor})
+    return items, next_cursor
 
 
 def get_download_link(
