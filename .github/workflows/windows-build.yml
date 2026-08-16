@@ -24,6 +24,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        # Явно указываем ref: без него checkout в reusable workflow берёт коммит,
+        # который был до бампа версии в release.yml, и версия в собранных
+        # файлах отставала от версии в теге релиза на один патч.
+        with:
+          ref: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -118,6 +123,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        # Явно указываем ref: без него checkout в reusable workflow берёт коммит,
+        # который был до бампа версии в release.yml, и версия в собранных
+        # файлах отставала от версии в теге релиза на один патч.
+        with:
+          ref: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
