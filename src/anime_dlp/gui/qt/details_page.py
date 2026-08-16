@@ -128,7 +128,13 @@ class DetailsPage(QWidget):
             Qt.TransformationMode.SmoothTransformation,
         )
         self.poster_label.setPixmap(pixmap)
-        self.poster_label.setVisible(True)
+        # Постер может загрузиться раньше информации об аниме — до
+        # _build_form() poster_label ещё ни к чему не прикреплён (без
+        # родителя), и setVisible(True) на нём превращает его в отдельное
+        # плавающее окно верхнего уровня. Показываем только если он уже
+        # добавлен в layout; иначе _build_form() сам покажет его при сборке.
+        if self.poster_label.parentWidget() is not None:
+            self.poster_label.setVisible(True)
 
     def _on_info_loaded(self, info: dict, error: str):
         if error or not info:
@@ -151,6 +157,9 @@ class DetailsPage(QWidget):
         header_row.addWidget(self.poster_label)
         header_row.addWidget(title_label, 1)
         self.form_box.addLayout(header_row)
+
+        if not self.poster_label.pixmap().isNull():
+            self.poster_label.setVisible(True)
 
         info_group = self._build_info_group()
         translation_group = PreferencesGroup(title="Озвучка")
