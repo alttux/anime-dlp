@@ -3,7 +3,7 @@ import threading
 import requests
 from gi.repository import Adw, Gdk, GLib, Gtk
 
-from anime_dlp.core.anime_info import extract_anime_info, has_any_info
+from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
 from anime_dlp.core.anime_service import get_anime_info
 from anime_dlp.core.cache import fetch_image_cached
 
@@ -15,6 +15,9 @@ class DetailsPage(Adw.NavigationPage):
         self.item = item
         self.translations = []
         self.series_count = None
+        self.is_movie = False
+        self.episode_checks: dict[int, Gtk.CheckButton] = {}
+        self._syncing_select_all = False
 
         toolbar_view = Adw.ToolbarView()
         toolbar_view.add_top_bar(Adw.HeaderBar())
@@ -38,11 +41,13 @@ class DetailsPage(Adw.NavigationPage):
         self.stack.add_named(form_scrolled, "form")
 
         self.poster_picture = Gtk.Picture(
-            content_fit=Gtk.ContentFit.CONTAIN,
+            content_fit=Gtk.ContentFit.COVER,
             can_shrink=True,
             halign=Gtk.Align.START,
             valign=Gtk.Align.START,
+            css_classes=["rounded-poster"],
         )
+        self.poster_picture.set_overflow(Gtk.Overflow.HIDDEN)
         self.poster_picture.set_size_request(200, 280)
         self.poster_picture.set_visible(False)
 
@@ -109,30 +114,40 @@ class DetailsPage(Adw.NavigationPage):
         return GLib.SOURCE_REMOVE
 
     def _build_form(self):
-        title_label = Gtk.Label(
-            label=self.item.get("title", "Anime"),
-            wrap=True,
-            xalign=0,
-            valign=Gtk.Align.CENTER,
-            hexpand=True,
-            css_classes=["title-1"],
-        )
+        info = extract_anime_info(self.item)
 
-        header_box = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=18, hexpand=True
-        )
-        header_box.append(self.poster_picture)
-        header_box.append(title_label)
-        self.form_box.append(header_box)
+        self.form_box.append(self._build_header(info))
 
-        info_group = self._build_info_group()
+        key_value_block = self._build_key_value_block(info)
+        if key_value_block is not None:
+            self.form_box.append(key_value_block)
+
+        if info.description:
+            description_label = Gtk.Label(
+                label=info.description,
+                wrap=True,
+                xalign=0,
+                hexpand=True,
+            )
+            self.form_box.append(description_label)
+
         translation_group = Adw.PreferencesGroup(title="Озвучка")
         self.translation_combo = Adw.ComboRow(title="Вариант озвучки")
         model = Gtk.StringList()
         for t in self.translations:
             model.append(f"{t['type']} — {t['name']}")
         self.translation_combo.set_model(model)
+        # Adw.ComboRow по умолчанию обрезает (ellipsize) текст пунктов
+        # выпадающего списка фиксированной шириной независимо от ширины
+        # popover — своя list-factory без ellipsize показывает названия
+        # озвучек/студий полностью.
+        list_factory = Gtk.SignalListItemFactory()
+        list_factory.connect("setup", self._on_translation_item_setup)
+        list_factory.connect("bind", self._on_translation_item_bind)
+        self.translation_combo.set_list_factory(list_factory)
+        self.translation_combo.connect("notify::selected", self._on_translation_changed)
         translation_group.add(self.translation_combo)
+        self.form_box.append(translation_group)
 
         self.is_movie = self.series_count == 0 or self.series_count is None
 
@@ -141,154 +156,155 @@ class DetailsPage(Adw.NavigationPage):
             row = Adw.ActionRow(title="Фильм", subtitle="Определено как фильм")
             episodes_group.add(row)
         else:
-            self.all_episodes_check = Gtk.CheckButton(label="Все серии")
-            self.range_episode_check = Gtk.CheckButton(label="Диапазон серий")
-            self.single_episode_check = Gtk.CheckButton(label="Одна серия")
-            self.range_episode_check.set_group(self.all_episodes_check)
-            self.single_episode_check.set_group(self.all_episodes_check)
-            self.single_episode_check.set_active(True)
+            episodes_group.add(self._build_episode_checklist(info))
 
-            self.episode_spin = Adw.SpinRow.new_with_range(1, self.series_count, 1)
-            self.episode_spin.set_title("Номер серии")
+        self.form_box.append(episodes_group)
 
-            self.range_from_spin = Adw.SpinRow.new_with_range(1, self.series_count, 1)
-            self.range_from_spin.set_title("Серия от")
-            self.range_to_spin = Adw.SpinRow.new_with_range(1, self.series_count, 1)
-            self.range_to_spin.set_title("Серия до")
-            self.range_to_spin.set_value(self.series_count)
+        self._apply_series_range()
 
-            for check in (
-                self.single_episode_check,
-                self.range_episode_check,
-                self.all_episodes_check,
-            ):
-                check.connect("toggled", self._on_episode_mode_toggled)
-
-            single_row = Adw.ActionRow(title="Одна серия")
-            single_row.add_prefix(self.single_episode_check)
-            single_row.set_activatable_widget(self.single_episode_check)
-            episodes_group.add(single_row)
-            episodes_group.add(self.episode_spin)
-
-            range_row = Adw.ActionRow(title="Диапазон серий")
-            range_row.add_prefix(self.range_episode_check)
-            range_row.set_activatable_widget(self.range_episode_check)
-            episodes_group.add(range_row)
-            episodes_group.add(self.range_from_spin)
-            episodes_group.add(self.range_to_spin)
-
-            all_row = Adw.ActionRow(title="Все серии")
-            all_row.add_prefix(self.all_episodes_check)
-            all_row.set_activatable_widget(self.all_episodes_check)
-            episodes_group.add(all_row)
-
-            self._on_episode_mode_toggled(None)
-
-        sections_flow = Gtk.FlowBox(
-            selection_mode=Gtk.SelectionMode.NONE,
-            homogeneous=False,
-            column_spacing=18,
-            row_spacing=18,
-            max_children_per_line=3,
-            min_children_per_line=1,
-            hexpand=True,
-            halign=Gtk.Align.FILL,
-        )
-
-        if info_group is not None:
-            info_group.set_hexpand(True)
-            info_group.set_size_request(280, -1)
-            sections_flow.append(info_group)
-
-        translation_group.set_hexpand(True)
-        translation_group.set_size_request(280, -1)
-        sections_flow.append(translation_group)
-
-        episodes_group.set_hexpand(True)
-        episodes_group.set_size_request(280, -1)
-        sections_flow.append(episodes_group)
-
-        self.form_box.append(sections_flow)
-
-    @staticmethod
-    def _suffix_label(text: str) -> Gtk.Label:
-        return Gtk.Label(
-            label=text,
-            css_classes=["heading"],
+    def _build_header(self, info: AnimeInfo) -> Gtk.Box:
+        title_label = Gtk.Label(
+            label=self.item.get("title", "Anime"),
             wrap=True,
-            xalign=1,
-            justify=Gtk.Justification.RIGHT,
-            max_width_chars=20,
+            xalign=0,
+            css_classes=["title-1"],
         )
 
-    def _build_info_group(self) -> Adw.PreferencesGroup | None:
-        info = extract_anime_info(self.item)
-        if not has_any_info(info):
-            return None
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, hexpand=True)
+        text_box.append(title_label)
 
-        group = Adw.PreferencesGroup(title="Об аниме")
-
-        if info.status:
-            row = Adw.ActionRow(title="Статус")
-            row.add_suffix(self._suffix_label(info.status))
-            group.add(row)
-
-        if info.episodes_total:
-            if info.episodes_aired and info.episodes_aired != info.episodes_total:
-                episodes = f"{info.episodes_aired}/{info.episodes_total}"
-            else:
-                episodes = str(info.episodes_total)
-            row = Adw.ActionRow(title="Эпизоды")
-            row.add_suffix(self._suffix_label(episodes))
-            group.add(row)
-        elif info.episodes_aired:
-            row = Adw.ActionRow(title="Эпизоды")
-            row.add_suffix(self._suffix_label(str(info.episodes_aired)))
-            group.add(row)
-
-        if info.score:
-            rating = str(info.score)
-            if info.votes:
-                rating += f" ({info.votes} голосов)"
-            row = Adw.ActionRow(title="Рейтинг")
-            row.add_suffix(self._suffix_label(rating))
-            group.add(row)
-
-        if info.genres:
-            row = Adw.ActionRow(title="Жанры")
-            row.add_suffix(self._suffix_label(", ".join(info.genres)))
-            group.add(row)
-
-        if info.studios:
-            row = Adw.ActionRow(title="Студия")
-            row.add_suffix(self._suffix_label(", ".join(info.studios)))
-            group.add(row)
-
-        if info.description:
-            expander = Adw.ExpanderRow(title="Описание")
-            expander.set_expanded(False)
-            label = Gtk.Label(
-                label=info.description,
+        if info.title_orig:
+            subtitle_label = Gtk.Label(
+                label=info.title_orig,
                 wrap=True,
                 xalign=0,
-                max_width_chars=30,
-                margin_top=6,
-                margin_bottom=6,
-                margin_start=12,
-                margin_end=12,
+                css_classes=["dim-label"],
             )
-            expander.add_row(label)
-            group.add(expander)
+            text_box.append(subtitle_label)
 
-        return group
+        pills = self._build_genre_pills(info.genres)
+        if pills is not None:
+            text_box.append(pills)
 
-    def _on_episode_mode_toggled(self, button):
-        if hasattr(self, "episode_spin"):
-            self.episode_spin.set_sensitive(self.single_episode_check.get_active())
-        if hasattr(self, "range_from_spin"):
-            is_range = self.range_episode_check.get_active()
-            self.range_from_spin.set_sensitive(is_range)
-            self.range_to_spin.set_sensitive(is_range)
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18, hexpand=True)
+        header_box.append(self.poster_picture)
+        header_box.append(text_box)
+        return header_box
+
+    @staticmethod
+    def _build_genre_pills(genres: list[str]) -> Gtk.FlowBox | None:
+        if not genres:
+            return None
+        flow_box = Gtk.FlowBox(
+            selection_mode=Gtk.SelectionMode.NONE,
+            homogeneous=False,
+            column_spacing=6,
+            row_spacing=6,
+            min_children_per_line=1,
+            halign=Gtk.Align.START,
+        )
+        for genre in genres:
+            flow_box.append(Gtk.Label(label=genre, css_classes=["pill-badge"]))
+        return flow_box
+
+    @staticmethod
+    def _build_key_value_block(info: AnimeInfo) -> Gtk.Grid | None:
+        rows = build_detail_rows(info)
+        if not rows:
+            return None
+
+        grid = Gtk.Grid(row_spacing=6, column_spacing=12, hexpand=True)
+        for row_index, (label, value) in enumerate(rows):
+            grid.attach(
+                Gtk.Label(label=label, xalign=0, css_classes=["dim-label"]),
+                0, row_index, 1, 1,
+            )
+            grid.attach(
+                Gtk.Label(label=value, xalign=0, wrap=True, hexpand=True),
+                1, row_index, 1, 1,
+            )
+        return grid
+
+    def _build_episode_checklist(self, info: AnimeInfo) -> Gtk.Box:
+        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+
+        self.select_all_check = Gtk.CheckButton(label="Выбрать все")
+        self.select_all_check.connect("toggled", self._on_select_all_toggled)
+        container.append(self.select_all_check)
+
+        self.episode_checks = {}
+        listbox = Gtk.ListBox(css_classes=["boxed-list"], selection_mode=Gtk.SelectionMode.NONE)
+        for n in range(1, self.series_count + 1):
+            check = Gtk.CheckButton()
+            check.connect("toggled", self._on_episode_check_toggled)
+            self.episode_checks[n] = check
+
+            row = Adw.ActionRow(title=f"Серия {n}")
+            row.add_prefix(check)
+            row.set_activatable_widget(check)
+            if info.duration:
+                row.add_suffix(Gtk.Label(label=f"~{info.duration} мин", css_classes=["dim-label"]))
+            listbox.append(row)
+
+        scrolled = Gtk.ScrolledWindow(min_content_height=300, hexpand=True, vexpand=False)
+        scrolled.set_child(listbox)
+        container.append(scrolled)
+        return container
+
+    def _on_select_all_toggled(self, button):
+        if self._syncing_select_all:
+            return
+        self._syncing_select_all = True
+        active = button.get_active()
+        for check in self.episode_checks.values():
+            if check.get_sensitive():
+                check.set_active(active)
+        self._syncing_select_all = False
+
+    def _on_episode_check_toggled(self, button):
+        if self._syncing_select_all:
+            return
+        self._sync_select_all_state()
+
+    def _sync_select_all_state(self):
+        selectable = [c for c in self.episode_checks.values() if c.get_sensitive()]
+        checked = [c for c in selectable if c.get_active()]
+        self._syncing_select_all = True
+        if not selectable or not checked:
+            self.select_all_check.set_active(False)
+            self.select_all_check.set_inconsistent(False)
+        elif len(checked) == len(selectable):
+            self.select_all_check.set_inconsistent(False)
+            self.select_all_check.set_active(True)
+        else:
+            self.select_all_check.set_inconsistent(True)
+        self._syncing_select_all = False
+
+    @staticmethod
+    def _on_translation_item_setup(factory, list_item):
+        list_item.set_child(Gtk.Label(xalign=0, margin_start=6, margin_end=6, margin_top=6, margin_bottom=6))
+
+    @staticmethod
+    def _on_translation_item_bind(factory, list_item):
+        label = list_item.get_child()
+        label.set_label(list_item.get_item().get_string())
+
+    def _on_translation_changed(self, combo_row, _pspec):
+        self._apply_series_range()
+
+    def _apply_series_range(self):
+        if self.is_movie or not self.translations or not self.episode_checks:
+            return
+        selected = self.translation_combo.get_selected()
+        if selected == Gtk.INVALID_LIST_POSITION:
+            return
+        first, last = self.translations[selected].get("series_range", (1, self.series_count))
+        for n, check in self.episode_checks.items():
+            in_range = first <= n <= last
+            check.set_sensitive(in_range)
+            if not in_range and check.get_active():
+                check.set_active(False)
+        self._sync_select_all_state()
 
     def _on_download_clicked(self, button):
         selected = self.translation_combo.get_selected()
@@ -299,17 +315,13 @@ class DetailsPage(Adw.NavigationPage):
 
         if self.is_movie:
             eps_to_download = [0]
-        elif self.all_episodes_check.get_active():
-            eps_to_download = list(range(1, self.series_count + 1))
-        elif self.range_episode_check.get_active():
-            start = int(self.range_from_spin.get_value())
-            end = int(self.range_to_spin.get_value())
-            if start > end:
-                self.window.show_toast("«Серия от» не может быть больше «Серия до»")
-                return
-            eps_to_download = list(range(start, end + 1))
         else:
-            eps_to_download = [int(self.episode_spin.get_value())]
+            eps_to_download = sorted(
+                n for n, check in self.episode_checks.items() if check.get_active()
+            )
+            if not eps_to_download:
+                self.window.show_toast("Выберите хотя бы одну серию")
+                return
 
         dialog = Gtk.FileDialog(title="Выберите папку для скачивания")
         dialog.select_folder(self.window, None, self._on_folder_chosen, (translation, eps_to_download))

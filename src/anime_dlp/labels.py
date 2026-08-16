@@ -10,3 +10,14 @@ STATUS_MAP = {
     "ongoing": "Онгоинг",
     "anons": "Анонс",
 }
+
+# material_data["anime_kind"] (Kodik). Неизвестные значения показываются
+# как есть (с заглавной буквы) — см. extract_anime_info.
+KIND_MAP = {
+    "tv": "Сериал",
+    "movie": "Фильм",
+    "ova": "OVA",
+    "ona": "ONA",
+    "special": "Спешл",
+    "music": "Клип",
+}
