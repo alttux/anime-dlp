@@ -58,7 +58,7 @@ QFrame#rowSeparator {
     border: none;
 }
 QLabel#dimLabel {
-    color: palette(mid);
+    color: palette(placeholder-text);
 }
 QLabel#title1 {
     font-size: 18pt;
@@ -102,6 +102,11 @@ QTabBar::tab:!selected:hover {
 QFrame#coverCard:hover {
     background: palette(alternate-base);
     border-radius: 8px;
+}
+QLabel#pillBadge {
+    background: palette(alternate-base);
+    border-radius: 10px;
+    padding: 4px 12px;
 }
 """
 
@@ -249,6 +254,16 @@ class ComboRow(ActionRow):
     def set_items(self, items: list[str]):
         self.combo.clear()
         self.combo.addItems(items)
+        if items:
+            # QComboBox по умолчанию не расширяет свой выпадающий список
+            # шире закрытого поля — длинные названия студий/озвучек
+            # обрезались. Меряем самую длинную строку и явно задаём
+            # ширину и полю, и его попапу (view()).
+            metrics = self.combo.fontMetrics()
+            widest = max(metrics.horizontalAdvance(text) for text in items)
+            padding = 48
+            self.combo.view().setMinimumWidth(widest + padding)
+            self.combo.setMinimumWidth(min(widest + padding, 480))
 
     def current_index(self) -> int:
         return self.combo.currentIndex()

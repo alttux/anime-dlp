@@ -1,44 +1,57 @@
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
-    QButtonGroup,
+    QCheckBox,
     QFileDialog,
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QProgressBar,
     QPushButton,
-    QRadioButton,
     QScrollArea,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from anime_dlp.core.anime_info import extract_anime_info, has_any_info
-from anime_dlp.gui.qt.widgets import (
-    ActionRow,
-    ComboRow,
-    ExpanderRow,
-    FlowLayout,
-    NavHeaderBar,
-    PreferencesGroup,
-    SpinRow,
-)
+from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
+from anime_dlp.gui.qt.pixmap_utils import round_pixmap
+from anime_dlp.gui.qt.widgets import ActionRow, ComboRow, FlowLayout, NavHeaderBar, PreferencesGroup
 from anime_dlp.gui.qt.workers import AnimeInfoWorker, PosterWorker
 
 POSTER_WIDTH = 200
 POSTER_HEIGHT = 280
+POSTER_RADIUS = 12
 
 
-def _suffix_label(text: str) -> QLabel:
-    label = QLabel(text)
-    label.setObjectName("heading")
-    label.setWordWrap(True)
-    label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-    label.setMaximumWidth(200)
-    return label
+class _EpisodeRow(QFrame):
+    toggled = pyqtSignal(int, bool)
+
+    def __init__(self, number: int, duration: int | None, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 6, 12, 6)
+
+        self.checkbox = QCheckBox(f"Серия {number}")
+        self.checkbox.toggled.connect(lambda checked: self.toggled.emit(number, checked))
+        layout.addWidget(self.checkbox, 1)
+
+        if duration:
+            duration_label = QLabel(f"~{duration} мин")
+            duration_label.setObjectName("dimLabel")
+            layout.addWidget(duration_label)
+
+    def is_checked(self) -> bool:
+        return self.checkbox.isChecked()
+
+    def set_checked(self, checked: bool):
+        self.checkbox.setChecked(checked)
+
+    def set_enabled(self, enabled: bool):
+        self.checkbox.setEnabled(enabled)
 
 
 class DetailsPage(QWidget):
@@ -49,6 +62,8 @@ class DetailsPage(QWidget):
         self.translations: list[dict] = []
         self.series_count = None
         self.is_movie = False
+        self.episode_rows: dict[int, _EpisodeRow] = {}
+        self._syncing_select_all = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -127,6 +142,7 @@ class DetailsPage(QWidget):
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
+        pixmap = round_pixmap(pixmap, radius=POSTER_RADIUS)
         self.poster_label.setPixmap(pixmap)
         # Постер может загрузиться раньше информации об аниме — до
         # _build_form() poster_label ещё ни к чему не прикреплён (без
@@ -148,26 +164,30 @@ class DetailsPage(QWidget):
         self.stack.setCurrentIndex(1)
 
     def _build_form(self):
-        title_label = QLabel(self.item.get("title", "Anime"))
-        title_label.setObjectName("title1")
-        title_label.setWordWrap(True)
+        info = extract_anime_info(self.item)
 
-        header_row = QHBoxLayout()
-        header_row.setSpacing(18)
-        header_row.addWidget(self.poster_label)
-        header_row.addWidget(title_label, 1)
-        self.form_box.addLayout(header_row)
+        self.form_box.addLayout(self._build_header(info))
 
         if not self.poster_label.pixmap().isNull():
             self.poster_label.setVisible(True)
 
-        info_group = self._build_info_group()
+        key_value_widget = self._build_key_value_grid(info)
+        if key_value_widget is not None:
+            self.form_box.addWidget(key_value_widget)
+
+        if info.description:
+            description_label = QLabel(info.description)
+            description_label.setWordWrap(True)
+            self.form_box.addWidget(description_label)
+
         translation_group = PreferencesGroup(title="Озвучка")
         self.translation_combo = ComboRow("Вариант озвучки")
         self.translation_combo.set_items(
             [f"{t['type']} — {t['name']}" for t in self.translations]
         )
+        self.translation_combo.combo.currentIndexChanged.connect(self._on_translation_changed)
         translation_group.add(self.translation_combo)
+        self.form_box.addWidget(translation_group)
 
         self.is_movie = self.series_count == 0 or self.series_count is None
 
@@ -176,120 +196,144 @@ class DetailsPage(QWidget):
             row = ActionRow(title="Фильм", subtitle="Определено как фильм")
             episodes_group.add(row)
         else:
-            self.single_episode_radio = QRadioButton()
-            self.range_episode_radio = QRadioButton()
-            self.all_episodes_radio = QRadioButton()
-            self.single_episode_radio.setChecked(True)
+            episodes_group.add(self._build_episode_checklist(info))
 
-            self._episode_mode_group = QButtonGroup(self)
-            self._episode_mode_group.addButton(self.single_episode_radio)
-            self._episode_mode_group.addButton(self.range_episode_radio)
-            self._episode_mode_group.addButton(self.all_episodes_radio)
+        self.form_box.addWidget(episodes_group)
 
-            self.episode_spin = SpinRow("Номер серии", 1, self.series_count, 1)
+        self._apply_series_range()
 
-            self.range_from_spin = SpinRow("Серия от", 1, self.series_count, 1)
-            self.range_to_spin = SpinRow("Серия до", 1, self.series_count, self.series_count)
+    def _build_header(self, info: AnimeInfo) -> QHBoxLayout:
+        title_label = QLabel(self.item.get("title", "Anime"))
+        title_label.setObjectName("title1")
+        title_label.setWordWrap(True)
 
-            for radio in (
-                self.single_episode_radio,
-                self.range_episode_radio,
-                self.all_episodes_radio,
-            ):
-                radio.toggled.connect(self._on_episode_mode_toggled)
+        text_box = QVBoxLayout()
+        text_box.setSpacing(6)
+        text_box.addWidget(title_label)
 
-            single_row = ActionRow(title="Одна серия")
-            single_row.add_prefix(self.single_episode_radio)
-            episodes_group.add(single_row)
-            episodes_group.add(self.episode_spin)
+        if info.title_orig:
+            subtitle_label = QLabel(info.title_orig)
+            subtitle_label.setObjectName("dimLabel")
+            subtitle_label.setWordWrap(True)
+            text_box.addWidget(subtitle_label)
 
-            range_row = ActionRow(title="Диапазон серий")
-            range_row.add_prefix(self.range_episode_radio)
-            episodes_group.add(range_row)
-            episodes_group.add(self.range_from_spin)
-            episodes_group.add(self.range_to_spin)
+        pills = self._build_genre_pills(info.genres)
+        if pills is not None:
+            text_box.addWidget(pills)
+        text_box.addStretch(1)
 
-            all_row = ActionRow(title="Все серии")
-            all_row.add_prefix(self.all_episodes_radio)
-            episodes_group.add(all_row)
+        header_row = QHBoxLayout()
+        header_row.setSpacing(18)
+        header_row.addWidget(self.poster_label)
+        header_row.addLayout(text_box, 1)
+        return header_row
 
-            self._on_episode_mode_toggled()
+    @staticmethod
+    def _build_genre_pills(genres: list[str]) -> QWidget | None:
+        if not genres:
+            return None
+        container = QWidget()
+        flow_layout = FlowLayout(container, spacing=6)
+        for genre in genres:
+            label = QLabel(genre)
+            label.setObjectName("pillBadge")
+            flow_layout.addWidget(label)
+        return container
 
-        flow_container = QWidget()
-        sections_flow = FlowLayout(flow_container, spacing=18, max_columns=3)
-
-        if info_group is not None:
-            info_group.setMinimumWidth(280)
-            sections_flow.addWidget(info_group)
-
-        translation_group.setMinimumWidth(280)
-        sections_flow.addWidget(translation_group)
-
-        episodes_group.setMinimumWidth(280)
-        sections_flow.addWidget(episodes_group)
-
-        self.form_box.addWidget(flow_container)
-
-    def _build_info_group(self) -> PreferencesGroup | None:
-        info = extract_anime_info(self.item)
-        if not has_any_info(info):
+    @staticmethod
+    def _build_key_value_grid(info: AnimeInfo) -> QWidget | None:
+        rows = build_detail_rows(info)
+        if not rows:
             return None
 
-        group = PreferencesGroup(title="Об аниме")
+        container = QWidget()
+        grid = QGridLayout(container)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(6)
+        grid.setContentsMargins(0, 0, 0, 0)
+        for row_index, (label, value) in enumerate(rows):
+            label_widget = QLabel(label)
+            label_widget.setObjectName("dimLabel")
+            grid.addWidget(label_widget, row_index, 0)
 
-        if info.status:
-            row = ActionRow(title="Статус")
-            row.add_suffix(_suffix_label(info.status))
-            group.add(row)
+            value_widget = QLabel(value)
+            value_widget.setWordWrap(True)
+            grid.addWidget(value_widget, row_index, 1)
+        grid.setColumnStretch(1, 1)
+        return container
 
-        if info.episodes_total:
-            if info.episodes_aired and info.episodes_aired != info.episodes_total:
-                episodes = f"{info.episodes_aired}/{info.episodes_total}"
-            else:
-                episodes = str(info.episodes_total)
-            row = ActionRow(title="Эпизоды")
-            row.add_suffix(_suffix_label(episodes))
-            group.add(row)
-        elif info.episodes_aired:
-            row = ActionRow(title="Эпизоды")
-            row.add_suffix(_suffix_label(str(info.episodes_aired)))
-            group.add(row)
+    def _build_episode_checklist(self, info: AnimeInfo) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
 
-        if info.score:
-            rating = str(info.score)
-            if info.votes:
-                rating += f" ({info.votes} голосов)"
-            row = ActionRow(title="Рейтинг")
-            row.add_suffix(_suffix_label(rating))
-            group.add(row)
+        self.select_all_check = QCheckBox("Выбрать все")
+        self.select_all_check.setTristate(True)
+        self.select_all_check.stateChanged.connect(self._on_select_all_toggled)
+        layout.addWidget(self.select_all_check)
 
-        if info.genres:
-            row = ActionRow(title="Жанры")
-            row.add_suffix(_suffix_label(", ".join(info.genres)))
-            group.add(row)
+        self.episode_rows = {}
+        list_widget = QWidget()
+        list_layout = QVBoxLayout(list_widget)
+        list_layout.setContentsMargins(0, 0, 0, 0)
+        list_layout.setSpacing(0)
+        for n in range(1, self.series_count + 1):
+            row = _EpisodeRow(n, info.duration)
+            row.toggled.connect(self._on_episode_toggled)
+            self.episode_rows[n] = row
+            list_layout.addWidget(row)
 
-        if info.studios:
-            row = ActionRow(title="Студия")
-            row.add_suffix(_suffix_label(", ".join(info.studios)))
-            group.add(row)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(320)
+        scroll.setWidget(list_widget)
+        layout.addWidget(scroll)
+        return container
 
-        if info.description:
-            expander = ExpanderRow(title="Описание")
-            expander.set_expanded(False)
-            label = QLabel(info.description)
-            label.setWordWrap(True)
-            expander.add_row(label)
-            group.add(expander)
+    def _on_select_all_toggled(self, state: int):
+        if self._syncing_select_all:
+            return
+        self._syncing_select_all = True
+        checked = Qt.CheckState(state) == Qt.CheckState.Checked
+        for row in self.episode_rows.values():
+            if row.checkbox.isEnabled():
+                row.set_checked(checked)
+        self._syncing_select_all = False
 
-        return group
+    def _on_episode_toggled(self, _number: int, _checked: bool):
+        if self._syncing_select_all:
+            return
+        self._sync_select_all_state()
 
-    def _on_episode_mode_toggled(self, *_args):
-        if hasattr(self, "episode_spin"):
-            self.episode_spin.setEnabled(self.single_episode_radio.isChecked())
-        if hasattr(self, "range_from_spin"):
-            is_range = self.range_episode_radio.isChecked()
-            self.range_from_spin.setEnabled(is_range)
-            self.range_to_spin.setEnabled(is_range)
+    def _sync_select_all_state(self):
+        selectable = [r for r in self.episode_rows.values() if r.checkbox.isEnabled()]
+        checked = [r for r in selectable if r.is_checked()]
+        self._syncing_select_all = True
+        if not selectable or not checked:
+            self.select_all_check.setCheckState(Qt.CheckState.Unchecked)
+        elif len(checked) == len(selectable):
+            self.select_all_check.setCheckState(Qt.CheckState.Checked)
+        else:
+            self.select_all_check.setCheckState(Qt.CheckState.PartiallyChecked)
+        self._syncing_select_all = False
+
+    def _on_translation_changed(self, _index: int):
+        self._apply_series_range()
+
+    def _apply_series_range(self):
+        if self.is_movie or not self.translations or not self.episode_rows:
+            return
+        index = self.translation_combo.current_index()
+        if index < 0:
+            return
+        first, last = self.translations[index].get("series_range", (1, self.series_count))
+        for n, row in self.episode_rows.items():
+            in_range = first <= n <= last
+            row.set_enabled(in_range)
+            if not in_range and row.is_checked():
+                row.set_checked(False)
+        self._sync_select_all_state()
 
     def _on_download_clicked(self):
         selected = self.translation_combo.current_index()
@@ -300,17 +344,13 @@ class DetailsPage(QWidget):
 
         if self.is_movie:
             eps_to_download = [0]
-        elif self.all_episodes_radio.isChecked():
-            eps_to_download = list(range(1, self.series_count + 1))
-        elif self.range_episode_radio.isChecked():
-            start = self.range_from_spin.value()
-            end = self.range_to_spin.value()
-            if start > end:
-                self.window.show_toast("«Серия от» не может быть больше «Серия до»")
-                return
-            eps_to_download = list(range(start, end + 1))
         else:
-            eps_to_download = [self.episode_spin.value()]
+            eps_to_download = sorted(
+                n for n, row in self.episode_rows.items() if row.is_checked()
+            )
+            if not eps_to_download:
+                self.window.show_toast("Выберите хотя бы одну серию")
+                return
 
         folder = QFileDialog.getExistingDirectory(
             self.window, "Выберите папку для скачивания"
