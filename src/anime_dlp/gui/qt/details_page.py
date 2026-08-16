@@ -207,7 +207,7 @@ class DetailsPage(QWidget):
             self._on_episode_mode_toggled()
 
         flow_container = QWidget()
-        sections_flow = FlowLayout(flow_container, spacing=18)
+        sections_flow = FlowLayout(flow_container, spacing=18, max_columns=3)
 
         if info_group is not None:
             info_group.setMinimumWidth(280)

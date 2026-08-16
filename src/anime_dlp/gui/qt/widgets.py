@@ -87,6 +87,22 @@ QLabel#toast {
     border-radius: 8px;
     padding: 8px 16px;
 }
+QTabBar::tab {
+    padding: 6px 18px;
+    border-radius: 14px;
+    margin: 0 2px;
+}
+QTabBar::tab:selected {
+    background: palette(highlight);
+    color: palette(highlighted-text);
+}
+QTabBar::tab:!selected:hover {
+    background: palette(midlight);
+}
+QFrame#coverCard:hover {
+    background: palette(alternate-base);
+    border-radius: 8px;
+}
 """
 
 
@@ -290,13 +306,19 @@ class ExpanderRow(QFrame):
 
 class FlowLayout(QLayout):
     """Реализация flow-layout (по мотивам примера Qt "Flow Layout"),
-    ограниченная тремя колонками в строке."""
+    заполняющая строку по ширине; max_columns дополнительно ограничивает
+    число элементов в строке (None — без ограничения, только по ширине)."""
 
-    MAX_COLUMNS = 3
-
-    def __init__(self, parent=None, margin: int = 0, spacing: int = 18):
+    def __init__(
+        self,
+        parent=None,
+        margin: int = 0,
+        spacing: int = 18,
+        max_columns: int | None = None,
+    ):
         super().__init__(parent)
         self._spacing = spacing
+        self._max_columns = max_columns
         self._items: list = []
         if margin >= 0:
             self.setContentsMargins(margin, margin, margin, margin)
@@ -356,9 +378,9 @@ class FlowLayout(QLayout):
         for item in self._items:
             item_size = item.sizeHint()
             next_x = x + item_size.width() + self._spacing
-            wrap = items_in_line >= self.MAX_COLUMNS or (
-                next_x - self._spacing > effective_rect.right() and line_height > 0
-            )
+            wrap = (
+                self._max_columns is not None and items_in_line >= self._max_columns
+            ) or (next_x - self._spacing > effective_rect.right() and line_height > 0)
             if wrap:
                 x = effective_rect.x()
                 y += line_height + self._spacing

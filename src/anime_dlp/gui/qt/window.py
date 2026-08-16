@@ -21,9 +21,9 @@ class AnimeDlpWindow(QMainWindow):
 
         self._pages: list = []
 
-        from anime_dlp.gui.qt.search_page import SearchPage
+        from anime_dlp.gui.qt.home_page import HomePage
 
-        self.push_page(SearchPage(window=self))
+        self.push_page(HomePage(window=self))
 
     def push_page(self, page):
         self._pages.append(page)

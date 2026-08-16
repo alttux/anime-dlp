@@ -2,7 +2,7 @@ from pathlib import Path
 
 from gi.repository import Adw
 
-from anime_dlp.gui.gtk.search_page import SearchPage
+from anime_dlp.gui.gtk.home_page import HomePage
 
 
 class AnimeDlpWindow(Adw.ApplicationWindow):
@@ -14,7 +14,7 @@ class AnimeDlpWindow(Adw.ApplicationWindow):
         self.set_title("Anime Downloader")
 
         self.nav_view = Adw.NavigationView()
-        self.nav_view.add(SearchPage(window=self))
+        self.nav_view.add(HomePage(window=self))
 
         self.toast_overlay = Adw.ToastOverlay()
         self.toast_overlay.set_child(self.nav_view)
