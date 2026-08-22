@@ -1,4 +1,5 @@
 import json
+import threading
 
 from anime_parsers_ru import KodikList, KodikParser
 from anime_parsers_ru.api_kodik import Api
@@ -28,12 +29,23 @@ def _dedupe_by_anime(items: list[dict]) -> list[dict]:
     return list(seen.values())
 
 
+_parser: KodikParser | None = None
+_parser_lock = threading.Lock()
+
+
 def _get_parser() -> KodikParser:
-    token = load_token()
-    parser = KodikParser(token=token, validate_token=token is not None)
-    if parser.TOKEN and parser.TOKEN != token:
-        save_token(parser.TOKEN)
-    return parser
+    """Парсер кэшируется на уровне процесса: с validate_token=True каждое
+    создание KodikParser делает 5 доп. запросов к Kodik, а фоновая
+    предзагрузка (gui/prefetch.py) вызывает _get_parser() десятки раз подряд
+    — пересоздание парсера на каждый вызов умножило бы число запросов."""
+    global _parser
+    with _parser_lock:
+        if _parser is None:
+            token = load_token()
+            _parser = KodikParser(token=token, validate_token=token is not None)
+            if _parser.TOKEN and _parser.TOKEN != token:
+                save_token(_parser.TOKEN)
+        return _parser
 
 
 def search_anime(title: str) -> list[dict]:
