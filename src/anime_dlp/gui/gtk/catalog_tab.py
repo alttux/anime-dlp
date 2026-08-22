@@ -3,7 +3,12 @@ import threading
 from gi.repository import Adw, GLib, Gtk
 
 from anime_dlp.core.anime_service import get_popular_anime
+from anime_dlp.gui import prefetch
 from anime_dlp.gui.gtk.cover_card import CoverCard
+
+# Насколько близко к концу прокрутки нужно оказаться, чтобы подгрузить
+# следующую пачку (в тех же единицах, что и Gtk.Adjustment, обычно пиксели).
+_SCROLL_THRESHOLD = 200
 
 
 class CatalogTab(Gtk.Box):
@@ -30,15 +35,16 @@ class CatalogTab(Gtk.Box):
             margin_start=12,
             margin_end=12,
         )
-        scrolled = Gtk.ScrolledWindow(vexpand=True)
-        scrolled.set_child(self.flow_box)
-        self.append(scrolled)
+        self.scrolled = Gtk.ScrolledWindow(vexpand=True)
+        self.scrolled.set_child(self.flow_box)
+        self.append(self.scrolled)
 
-        self.load_more_button = Gtk.Button(
-            label="Прогрузить ещё", halign=Gtk.Align.CENTER, margin_bottom=12
-        )
-        self.load_more_button.connect("clicked", lambda *_: self._load_page())
-        self.append(self.load_more_button)
+        adjustment = self.scrolled.get_vadjustment()
+        # "changed" срабатывает, когда меняется высота содержимого или
+        # видимой области (добавили карточки, изменили размер окна) —
+        # этим же обработчиком дозаполняем сетку под видимую область.
+        adjustment.connect("changed", lambda *_: self._maybe_load_more())
+        adjustment.connect("value-changed", lambda *_: self._maybe_load_more())
 
         self.spinner = Adw.Spinner(halign=Gtk.Align.CENTER, margin_bottom=12)
         self.spinner.set_visible(False)
@@ -50,7 +56,6 @@ class CatalogTab(Gtk.Box):
         if self._loading:
             return
         self._loading = True
-        self.load_more_button.set_sensitive(False)
         self.spinner.set_visible(True)
         threading.Thread(target=self._load_worker, args=(self._next_cursor,), daemon=True).start()
 
@@ -70,10 +75,21 @@ class CatalogTab(Gtk.Box):
         else:
             for item in items:
                 self.flow_box.append(CoverCard(item, on_click=self._on_card_clicked))
+                prefetch.prefetch(item.get("shikimori_id"))
             self._next_cursor = next_cursor
-        self.load_more_button.set_sensitive(True)
-        self.load_more_button.set_visible(next_cursor is not None)
         return GLib.SOURCE_REMOVE
+
+    def _maybe_load_more(self):
+        if self._loading or self._next_cursor is None:
+            return
+        adjustment = self.scrolled.get_vadjustment()
+        near_bottom = (
+            adjustment.get_value() + adjustment.get_page_size()
+            >= adjustment.get_upper() - _SCROLL_THRESHOLD
+        )
+        not_full = adjustment.get_upper() <= adjustment.get_page_size() + 1
+        if near_bottom or not_full:
+            self._load_page()
 
     def _on_card_clicked(self, item: dict):
         if not item.get("shikimori_id"):

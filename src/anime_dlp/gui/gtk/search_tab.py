@@ -4,6 +4,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from anime_dlp.core import network
 from anime_dlp.core.anime_service import search_anime
+from anime_dlp.gui import prefetch
 from anime_dlp.labels import TYPE_MAP
 
 DEBOUNCE_MS = 300
@@ -119,6 +120,7 @@ class SearchTab(Gtk.Box):
             row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
             row.connect("activated", self._on_result_activated, item)
             self.results_listbox.append(row)
+            prefetch.prefetch(item.get("shikimori_id"))
 
         self.stack.set_visible_child_name("results")
         return GLib.SOURCE_REMOVE

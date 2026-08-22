@@ -4,8 +4,8 @@ import requests
 from gi.repository import Adw, Gdk, GLib, Gtk
 
 from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
-from anime_dlp.core.anime_service import get_anime_info
 from anime_dlp.core.cache import fetch_image_cached
+from anime_dlp.gui import prefetch
 
 
 class DetailsPage(Adw.NavigationPage):
@@ -94,7 +94,7 @@ class DetailsPage(Adw.NavigationPage):
 
     def _fetch_info_worker(self):
         try:
-            info = get_anime_info(self.item["shikimori_id"])
+            info = prefetch.get_or_fetch(self.item["shikimori_id"])
             error = None
         except Exception as exc:
             info = None
