@@ -8,7 +8,6 @@ import requests
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from anime_dlp.core.anime_service import (
-    get_anime_info,
     get_download_link,
     get_popular_anime,
     search_anime,
@@ -16,6 +15,7 @@ from anime_dlp.core.anime_service import (
 from anime_dlp.core.cache import fetch_image_cached
 from anime_dlp.core.downloader import download_episode
 from anime_dlp.filenames import sanitize_filename
+from anime_dlp.gui import prefetch
 
 
 class SearchWorker(QThread):
@@ -44,7 +44,7 @@ class AnimeInfoWorker(QThread):
 
     def run(self):
         try:
-            info = get_anime_info(self.shikimori_id)
+            info = prefetch.get_or_fetch(self.shikimori_id)
             error = ""
         except Exception as exc:
             info = {}

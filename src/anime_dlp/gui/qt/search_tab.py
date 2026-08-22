@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from anime_dlp.gui import prefetch
 from anime_dlp.gui.qt.widgets import ActionRow, StatusPage
 from anime_dlp.gui.qt.workers import SearchWorker
 from anime_dlp.labels import TYPE_MAP
@@ -124,6 +125,7 @@ class SearchTab(QWidget):
             row.add_suffix(QLabel("›"))
             row.clicked.connect(lambda item=item: self._on_result_activated(item))
             self.results_layout.insertWidget(self.results_layout.count() - 1, row)
+            prefetch.prefetch(item.get("shikimori_id"))
 
         self.stack.setCurrentIndex(3)  # results
 
