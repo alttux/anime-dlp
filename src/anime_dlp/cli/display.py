@@ -1,8 +1,9 @@
 from rich import box
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 
+from anime_dlp import about
 from anime_dlp.core.anime_info import extract_anime_info, has_any_info
 from anime_dlp.labels import TYPE_MAP
 
@@ -17,6 +18,42 @@ def print_banner():
         padding=(1, 2),
     )
     console.print(banner)
+
+
+def show_about():
+    facts = Table.grid(padding=(0, 2))
+    facts.add_column(style="dim", no_wrap=True)
+    facts.add_column()
+    facts.add_row("Версия", about.VERSION)
+    facts.add_row("Автор", about.DEVELOPER)
+    facts.add_row("Лицензия", f"{about.LICENSE_NAME}  ({about.LICENSE_URL})")
+    facts.add_row("GitHub", about.WEBSITE)
+    facts.add_row("Ошибки", about.ISSUE_URL)
+
+    libraries = Table.grid(padding=(0, 2))
+    libraries.add_column(style="bold", no_wrap=True)
+    libraries.add_column()
+    for name, url, description in about.LIBRARIES:
+        libraries.add_row(name, f"{description}\n[bright_black]{url}[/]")
+
+    body = Group(
+        f"[dim]{about.SUMMARY}[/]",
+        "",
+        facts,
+        "",
+        "[bold cyan]Библиотеки[/]",
+        libraries,
+    )
+
+    console.print(
+        Panel(
+            body,
+            title="[bold cyan]О программе[/]",
+            border_style="cyan",
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+    )
 
 
 def show_anime_table(items: list[dict]):

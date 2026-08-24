@@ -5,7 +5,7 @@ from pathlib import Path
 from anime_dlp import __version__
 from anime_dlp.config import DOWNLOAD_DIR
 from anime_dlp.cli import run_cli
-from anime_dlp.cli.display import show_error
+from anime_dlp.cli.display import show_about, show_error
 from anime_dlp.core import network
 from anime_dlp.logger import ConsoleLogger
 
@@ -28,6 +28,12 @@ def main():
         version=f"anime-dlp {__version__}",
     )
     parser.add_argument(
+        "-a",
+        "--about",
+        action="store_true",
+        help="Показать информацию о программе и выйти",
+    )
+    parser.add_argument(
         "-d", "--dir", default=None, help="Директория для скачивания"
     )
     parser.add_argument(
@@ -47,6 +53,11 @@ def main():
         help="Сетевой интерфейс для выхода в интернет (например, wlan0), в обход VPN/TUN",
     )
     args = parser.parse_args()
+
+    # До создания директорий и любых сетевых действий: --about только печатает.
+    if args.about:
+        show_about()
+        return
 
     download_dir = Path(args.dir) if args.dir else DOWNLOAD_DIR
     download_dir.mkdir(parents=True, exist_ok=True)
