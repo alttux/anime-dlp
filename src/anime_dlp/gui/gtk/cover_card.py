@@ -10,10 +10,15 @@ _HEIGHT = 200
 
 
 class CoverCard(Gtk.Button):
-    def __init__(self, item: dict, on_click):
+    """Обложка + подпись. item=None и title=... — карточка без записи аниме
+    (так сделаны карточки жанров в «Категориях»): подпись показывается сразу,
+    а обложка привязывается позже через set_item(), когда её найдут в фоне."""
+
+    def __init__(self, item: dict | None, on_click, title: str | None = None):
         super().__init__(css_classes=["flat"], halign=Gtk.Align.START)
         self._item = item
-        self.connect("clicked", lambda *_: on_click(item))
+        self._on_click = on_click
+        self.connect("clicked", lambda *_: self._on_click(self._item))
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, width_request=_WIDTH)
 
@@ -25,7 +30,7 @@ class CoverCard(Gtk.Button):
         box.append(self.picture)
 
         title_label = Gtk.Label(
-            label=item.get("title", "Unknown"),
+            label=title or (item or {}).get("title", "Unknown"),
             wrap=True,
             lines=2,
             ellipsize=Pango.EllipsizeMode.END,
@@ -35,7 +40,17 @@ class CoverCard(Gtk.Button):
         box.append(title_label)
         self.set_child(box)
 
-        poster_url = extract_anime_info(item).poster_url
+        if item is not None:
+            self._start_poster_load()
+
+    def set_item(self, item: dict):
+        """Привязывает запись аниме к уже показанной карточке и подгружает
+        её обложку."""
+        self._item = item
+        self._start_poster_load()
+
+    def _start_poster_load(self):
+        poster_url = extract_anime_info(self._item).poster_url
         if poster_url:
             threading.Thread(target=self._load_poster, args=(poster_url,), daemon=True).start()
 

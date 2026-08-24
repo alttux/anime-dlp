@@ -12,13 +12,21 @@ _SCROLL_THRESHOLD = 200
 
 
 class CatalogTab(Gtk.Box):
+    """Сетка обложек с бесконечной прокруткой. loader — источник страниц с
+    сигнатурой (cursor, limit) -> (items, next_cursor); по умолчанию это
+    популярное («Главное»), страница жанра передаёт сюда get_genre_anime."""
+
     PAGE_SIZE = 10
 
-    def __init__(self, window):
+    def __init__(self, window, loader=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.window = window
+        self._loader = loader or get_popular_anime
         self._next_cursor: str | None = None
         self._loading = False
+        # Растёт при reload(): ответы запросов, стартовавших до перезагрузки,
+        # игнорируются, иначе они дорисовали бы старые карточки в новую сетку.
+        self._generation = 0
 
         self.flow_box = Gtk.FlowBox(
             selection_mode=Gtk.SelectionMode.NONE,
@@ -52,22 +60,43 @@ class CatalogTab(Gtk.Box):
 
         self._load_page()
 
+    def reload(self):
+        """Полная перезагрузка сетки с первой страницы (кнопка «Обновить»)."""
+        self._generation += 1
+        self._loading = False
+        self._next_cursor = None
+        while (child := self.flow_box.get_first_child()) is not None:
+            self.flow_box.remove(child)
+        self._load_page()
+
     def _load_page(self):
         if self._loading:
             return
         self._loading = True
         self.spinner.set_visible(True)
-        threading.Thread(target=self._load_worker, args=(self._next_cursor,), daemon=True).start()
+        threading.Thread(
+            target=self._load_worker,
+            args=(self._next_cursor, self._generation),
+            daemon=True,
+        ).start()
 
-    def _load_worker(self, cursor: str | None):
+    def _load_worker(self, cursor: str | None, generation: int):
         try:
-            items, next_cursor = get_popular_anime(cursor=cursor, limit=self.PAGE_SIZE)
+            items, next_cursor = self._loader(cursor, self.PAGE_SIZE)
             error = None
         except Exception as exc:
             items, next_cursor, error = [], cursor, str(exc)
-        GLib.idle_add(self._on_page_loaded, items, next_cursor, error)
+        GLib.idle_add(self._on_page_loaded, items, next_cursor, error, generation)
 
-    def _on_page_loaded(self, items: list[dict], next_cursor: str | None, error: str | None):
+    def _on_page_loaded(
+        self,
+        items: list[dict],
+        next_cursor: str | None,
+        error: str | None,
+        generation: int,
+    ):
+        if generation != self._generation:
+            return GLib.SOURCE_REMOVE
         self._loading = False
         self.spinner.set_visible(False)
         if error:

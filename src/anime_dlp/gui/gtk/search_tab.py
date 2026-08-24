@@ -65,6 +65,15 @@ class SearchTab(Gtk.Box):
     def build_interface_button(self) -> Gtk.MenuButton | None:
         return self.interface_button
 
+    def reload(self):
+        """Повторяет текущий запрос (кнопка «Обновить»). Кэш к этому моменту
+        уже очищен, поэтому результаты придут из сети."""
+        text = self.search_entry.get_text().strip()
+        if not text:
+            self.stack.set_visible_child_name("empty")
+            return
+        self._trigger_search(text)
+
     def _on_search_changed(self, entry):
         if self._debounce_id is not None:
             GLib.source_remove(self._debounce_id)

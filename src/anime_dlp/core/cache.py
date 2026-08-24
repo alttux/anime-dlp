@@ -12,6 +12,7 @@
 import hashlib
 import json
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -38,7 +39,8 @@ def _meta_path(key: str) -> Path:
     return _META_DIR / f"{_hash(key)}.json"
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
+def atomic_write(path: Path, data: bytes) -> None:
+    """Публичная — используется ещё и хранилищем избранного (core/favorites.py)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     tmp_path.write_bytes(data)
@@ -56,7 +58,7 @@ def get_cached_image(url: str, max_age: float = IMAGE_TTL_SECONDS) -> bytes | No
 
 
 def store_image(url: str, data: bytes) -> None:
-    _atomic_write(_image_path(url), data)
+    atomic_write(_image_path(url), data)
 
 
 def get_cached_json(key: str, max_age: float = META_TTL_SECONDS):
@@ -76,7 +78,7 @@ def get_cached_json(key: str, max_age: float = META_TTL_SECONDS):
 
 def store_json(key: str, data) -> None:
     payload = json.dumps({"fetched_at": time.time(), "data": data}, ensure_ascii=False)
-    _atomic_write(_meta_path(key), payload.encode("utf-8"))
+    atomic_write(_meta_path(key), payload.encode("utf-8"))
 
 
 def fetch_image_cached(url: str, timeout: float = 10) -> bytes:
@@ -90,3 +92,10 @@ def fetch_image_cached(url: str, timeout: float = 10) -> bytes:
     data = response.content
     store_image(url, data)
     return data
+
+
+def clear_all() -> None:
+    """Полностью удаляет дисковый кэш — обложки и метаданные. Токен и
+    избранное лежат в DATA_DIR и этой очисткой не затрагиваются."""
+    shutil.rmtree(_IMAGES_DIR, ignore_errors=True)
+    shutil.rmtree(_META_DIR, ignore_errors=True)

@@ -177,3 +177,5 @@ flatpak/build-dir/
 flatpak/repo/
 flatpak/flatpak-pip-generator.py
 *.flatpak
+# Избранное GUI (лежит рядом с токеном при запуске из исходников)
+favorites.json

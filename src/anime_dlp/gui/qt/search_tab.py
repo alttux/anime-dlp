@@ -77,6 +77,12 @@ class SearchTab(QWidget):
         # показывается (core.network.SUPPORTED всегда False на Windows).
         return None
 
+    def reload(self):
+        """Повторяет текущий запрос (кнопка «Обновить»). Кэш к этому моменту
+        уже очищен, поэтому результаты придут из сети."""
+        self._debounce_timer.stop()
+        self._trigger_search()
+
     def _on_text_changed(self, text: str):
         self._debounce_timer.stop()
         text = text.strip()

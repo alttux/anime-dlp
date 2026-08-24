@@ -3,6 +3,7 @@ import threading
 import requests
 from gi.repository import Adw, Gdk, GLib, Gtk
 
+from anime_dlp.core import favorites
 from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
 from anime_dlp.core.cache import fetch_image_cached
 from anime_dlp.gui import prefetch
@@ -18,6 +19,7 @@ class DetailsPage(Adw.NavigationPage):
         self.is_movie = False
         self.episode_checks: dict[int, Gtk.CheckButton] = {}
         self._syncing_select_all = False
+        self._syncing_favorite = False
 
         toolbar_view = Adw.ToolbarView()
         toolbar_view.add_top_bar(Adw.HeaderBar())
@@ -163,11 +165,24 @@ class DetailsPage(Adw.NavigationPage):
             label=self.item.get("title", "Anime"),
             wrap=True,
             xalign=0,
+            hexpand=True,
             css_classes=["title-1"],
         )
 
+        self.favorite_button = Gtk.ToggleButton(
+            active=favorites.is_favorite(self.item.get("shikimori_id")),
+            valign=Gtk.Align.CENTER,
+            css_classes=["flat", "circular"],
+        )
+        self._sync_favorite_button()
+        self.favorite_button.connect("toggled", self._on_favorite_toggled)
+
+        title_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, hexpand=True)
+        title_row.append(title_label)
+        title_row.append(self.favorite_button)
+
         text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, hexpand=True)
-        text_box.append(title_label)
+        text_box.append(title_row)
 
         if info.title_orig:
             subtitle_label = Gtk.Label(
@@ -190,6 +205,30 @@ class DetailsPage(Adw.NavigationPage):
         header_box.append(self.poster_picture)
         header_box.append(text_box)
         return header_box
+
+    def _sync_favorite_button(self):
+        is_favorite = self.favorite_button.get_active()
+        self.favorite_button.set_icon_name(
+            "starred-symbolic" if is_favorite else "non-starred-symbolic"
+        )
+        self.favorite_button.set_tooltip_text(
+            "Убрать из избранного" if is_favorite else "Добавить в избранное"
+        )
+
+    def _on_favorite_toggled(self, button):
+        # Кнопка уже переключилась визуально — приводим хранилище в то же
+        # состояние (toggle() сам решает, добавить или удалить). Флаг нужен
+        # потому, что set_active() ниже сам эмитит "toggled".
+        if self._syncing_favorite:
+            return
+        self._syncing_favorite = True
+        is_favorite = favorites.toggle(self.item)
+        button.set_active(is_favorite)
+        self._sync_favorite_button()
+        self._syncing_favorite = False
+        self.window.show_toast(
+            "Добавлено в избранное" if is_favorite else "Удалено из избранного"
+        )
 
     @staticmethod
     def _build_genre_pills(genres: list[str]) -> Gtk.FlowBox | None:
