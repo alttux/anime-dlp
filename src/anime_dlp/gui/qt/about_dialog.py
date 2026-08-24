@@ -41,6 +41,9 @@ class AboutDialog(QDialog):
         layout.addWidget(self._libraries_block())
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        # Стандартные подписи Qt приходят на английском, пока не подключены
+        # переводы — весь остальной интерфейс русский, задаём текст явно.
+        buttons.button(QDialogButtonBox.StandardButton.Close).setText("Закрыть")
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)

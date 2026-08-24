@@ -135,7 +135,14 @@ def _list_anime(
         # allow_warnings=False: при неизвестном жанре билдер печатает
         # предупреждение прямо в stdout, а мы вызываемся из фонового потока
         # GUI и из-под rich-прогрессбара в CLI.
-        query = KodikList(token=parser.TOKEN, allow_warnings=False)
+        #
+        # _args={} обязателен: у Api.__init__ в anime_parsers_ru этот параметр
+        # объявлен изменяемым значением по умолчанию (_args: dict = {}), то
+        # есть один и тот же словарь на весь процесс. Без явного пустого
+        # словаря фильтр .anime_genres() из запроса по жанру протекал бы во
+        # все последующие запросы — «Главное» показывало бы тайтлы последнего
+        # открытого жанра.
+        query = KodikList(token=parser.TOKEN, allow_warnings=False, _args={})
         if genre:
             query = query.anime_genres(genre)
         try:
@@ -183,10 +190,26 @@ def get_genre_anime(
     return _list_anime(f"genre:{genre}", genre, cursor, limit)
 
 
-def get_genre_cover(genre: str) -> dict | None:
-    """Топ-1 аниме жанра — обложка для карточки жанра в «Категориях»."""
-    items, _ = get_genre_anime(genre, limit=1)
-    return items[0] if items else None
+_GENRE_COVER_CANDIDATES = 6
+
+
+def get_genre_cover(genre: str, exclude_ids=()) -> dict | None:
+    """Обложка для карточки жанра в «Категориях» — топ-1 аниме этого жанра.
+
+    exclude_ids позволяет пропустить тайтлы, уже занятые другими жанрами: у
+    самых высокорейтинговых аниме проставлено по 4-5 жанров сразу, поэтому без
+    этого половина карточек показывала бы один и тот же постер. Если все
+    кандидаты заняты, возвращается всё-таки первый — пустая карточка хуже
+    повтора.
+    """
+    items, _ = get_genre_anime(genre, limit=_GENRE_COVER_CANDIDATES)
+    if not items:
+        return None
+    excluded = set(exclude_ids)
+    for item in items:
+        if item.get("shikimori_id") not in excluded:
+            return item
+    return items[0]
 
 
 def get_download_link(

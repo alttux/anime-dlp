@@ -62,12 +62,14 @@ class CategoriesTab(Gtk.Box):
         ).start()
 
     def _load_covers_worker(self, generation: int):
+        used_ids: set[str] = set()
         for genre in GENRES:
             try:
-                item = get_genre_cover(genre)
+                item = get_genre_cover(genre, used_ids)
             except Exception:
                 continue
             if item:
+                used_ids.add(item.get("shikimori_id"))
                 GLib.idle_add(self._on_cover_loaded, genre, item, generation)
         GLib.idle_add(self._on_covers_done, generation)
 

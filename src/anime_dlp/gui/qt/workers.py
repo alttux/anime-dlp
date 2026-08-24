@@ -104,12 +104,14 @@ class GenreCoversWorker(QThread):
         self.generation = generation
 
     def run(self):
+        used_ids: set[str] = set()
         for genre in self.genres:
             try:
-                item = get_genre_cover(genre)
+                item = get_genre_cover(genre, used_ids)
             except Exception:
                 continue
             if item:
+                used_ids.add(item.get("shikimori_id"))
                 self.cover_ready.emit(genre, item, self.generation)
 
 
