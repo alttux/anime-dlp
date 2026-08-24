@@ -1,7 +1,7 @@
 import json
 import threading
 
-from anime_parsers_ru import KodikList, KodikParser
+from anime_parsers_ru import KodikList, KodikParser, errors
 from anime_parsers_ru.api_kodik import Api
 
 from anime_dlp.core import cache
@@ -48,6 +48,15 @@ def _get_parser() -> KodikParser:
         return _parser
 
 
+def reset_parser() -> None:
+    """Сбрасывает закэшированный парсер — следующий вызов создаст новый и
+    заново получит токен. Нужен кнопке «Обновить» в GUI, которая удаляет
+    сохранённый токен вместе с кэшем."""
+    global _parser
+    with _parser_lock:
+        _parser = None
+
+
 def search_anime(title: str) -> list[dict]:
     title = _clean_surrogates(title)
     cache_key = f"search:{title.strip().lower()}"
@@ -81,9 +90,18 @@ def get_anime_info(shikimori_id: str) -> dict:
 
 _POPULAR_PAGE_LIMIT = 100  # максимум, который отдаёт Kodik API за один запрос
 
+# Жанры для раздела «Категории». Берём готовый список из библиотеки, чтобы
+# ничего не хардкодить: это те же русские строки, что Kodik кладёт в
+# material_data["anime_genres"] и что GUI показывает бейджами на странице
+# аниме — значит, фильтр и отображение всегда согласованы.
+GENRES: list[str] = Api.AnimeGenres.get_list()
 
-def get_popular_anime(
-    cursor: str | None = None, limit: int = 10
+
+def _list_anime(
+    cache_prefix: str,
+    genre: str | None,
+    cursor: str | None,
+    limit: int,
 ) -> tuple[list[dict], str | None]:
     """Возвращает (items, next_cursor). Чтобы получить следующую страницу
     ("Прогрузить ещё"), передайте next_cursor из предыдущего вызова обратно
@@ -96,7 +114,7 @@ def get_popular_anime(
     добавляло бы новых обложек. cursor — непрозрачная JSON-строка с остатком
     буфера и ссылкой на следующую сырую страницу.
     """
-    cache_key = f"popular:{cursor or 'first'}:{limit}"
+    cache_key = f"{cache_prefix}:{cursor or 'first'}:{limit}"
     cached = cache.get_cached_json(cache_key)
     if cached is not None:
         return cached["items"], cached["next_cursor"]
@@ -114,21 +132,31 @@ def get_popular_anime(
     parser = _get_parser()
     unique = _dedupe_by_anime(buffer)
     while len(unique) < limit:
-        query = KodikList(token=parser.TOKEN)
-        if link is not None:
-            raw = query.api_request(link=link)
-        elif not made_initial_request:
-            raw = (
-                query.anime_status("released")
-                .sort(Api.Sort.shikimori_rating)
-                .order(Api.Order.desc)
-                .limit(_POPULAR_PAGE_LIMIT)
-                .with_material_data(True)
-                .execute(return_json=True)
-            )
-            made_initial_request = True
-        else:
-            break  # больше сырых страниц нет
+        # allow_warnings=False: при неизвестном жанре билдер печатает
+        # предупреждение прямо в stdout, а мы вызываемся из фонового потока
+        # GUI и из-под rich-прогрессбара в CLI.
+        query = KodikList(token=parser.TOKEN, allow_warnings=False)
+        if genre:
+            query = query.anime_genres(genre)
+        try:
+            if link is not None:
+                raw = query.api_request(link=link)
+            elif not made_initial_request:
+                raw = (
+                    query.anime_status("released")
+                    .sort(Api.Sort.shikimori_rating)
+                    .order(Api.Order.desc)
+                    .limit(_POPULAR_PAGE_LIMIT)
+                    .with_material_data(True)
+                    .execute(return_json=True)
+                )
+                made_initial_request = True
+            else:
+                break  # больше сырых страниц нет
+        except errors.NoResults:
+            # Kodik отвечает ошибкой, а не пустым списком, когда под фильтр
+            # ничего не подошло (узкий жанр или конец пагинации).
+            break
         buffer.extend(raw.get("results", []))
         unique = _dedupe_by_anime(buffer)
         link = raw.get("next_page")
@@ -139,6 +167,26 @@ def get_popular_anime(
 
     cache.store_json(cache_key, {"items": items, "next_cursor": next_cursor})
     return items, next_cursor
+
+
+def get_popular_anime(
+    cursor: str | None = None, limit: int = 10
+) -> tuple[list[dict], str | None]:
+    """Популярное для раздела «Главное» — весь каталог по рейтингу."""
+    return _list_anime("popular", None, cursor, limit)
+
+
+def get_genre_anime(
+    genre: str, cursor: str | None = None, limit: int = 10
+) -> tuple[list[dict], str | None]:
+    """То же самое, но с серверной фильтрацией по жанру (раздел «Категории»)."""
+    return _list_anime(f"genre:{genre}", genre, cursor, limit)
+
+
+def get_genre_cover(genre: str) -> dict | None:
+    """Топ-1 аниме жанра — обложка для карточки жанра в «Категориях»."""
+    items, _ = get_genre_anime(genre, limit=1)
+    return items[0] if items else None
 
 
 def get_download_link(

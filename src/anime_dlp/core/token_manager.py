@@ -17,3 +17,9 @@ def save_token(token: str):
     path = _get_token_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(token)
+
+
+def delete_token():
+    """Удаляет сохранённый токен — следующий запрос получит новый от Kodik.
+    Вызывается кнопкой «Обновить» в GUI вместе с очисткой кэша."""
+    _get_token_path().unlink(missing_ok=True)

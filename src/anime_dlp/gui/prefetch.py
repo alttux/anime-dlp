@@ -13,6 +13,7 @@ _executor = ThreadPoolExecutor(max_workers=_MAX_WORKERS, thread_name_prefix="inf
 _lock = threading.Lock()
 _cache: dict[str, dict] = {}
 _futures: dict[str, Future] = {}
+_generation = 0  # растёт при clear(), см. _do_fetch
 
 
 def prefetch(shikimori_id: str | None) -> None:
@@ -27,11 +28,26 @@ def prefetch(shikimori_id: str | None) -> None:
 
 
 def _do_fetch(shikimori_id: str) -> dict:
+    with _lock:
+        generation = _generation
     info = get_anime_info(shikimori_id)
     with _lock:
-        _cache[shikimori_id] = info
+        # Если кэш успели очистить, пока запрос был в полёте, результат
+        # относится к прошлой «эпохе» — вернуть его вызывающему можно, а
+        # класть обратно в только что очищенный кэш нельзя.
+        if generation == _generation:
+            _cache[shikimori_id] = info
         _futures.pop(shikimori_id, None)
     return info
+
+
+def clear() -> None:
+    """Сбрасывает кэш предзагруженной информации об аниме (кнопка
+    «Обновить» в GUI)."""
+    global _generation
+    with _lock:
+        _generation += 1
+        _cache.clear()
 
 
 def get_or_fetch(shikimori_id: str) -> dict:

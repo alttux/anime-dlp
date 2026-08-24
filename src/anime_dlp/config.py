@@ -4,6 +4,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 TOKEN_FILE = ".kodik_token"
+FAVORITES_FILE = "favorites.json"
 
 # Внутри Flatpak каталог программы (/app) смонтирован только для чтения,
 # поэтому и загрузки, и токен уходят в пользовательские каталоги.
