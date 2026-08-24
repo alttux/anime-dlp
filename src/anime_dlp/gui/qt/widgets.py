@@ -108,6 +108,25 @@ QLabel#pillBadge {
     border-radius: 10px;
     padding: 4px 12px;
 }
+QPushButton#starButton {
+    border: none;
+    background: transparent;
+    font-size: 16pt;
+    padding: 0 4px;
+}
+QPushButton#starButton:hover {
+    background: palette(midlight);
+    border-radius: 4px;
+}
+QPushButton#iconButton {
+    border: none;
+    background: transparent;
+    font-size: 13pt;
+}
+QPushButton#iconButton:hover {
+    background: palette(midlight);
+    border-radius: 4px;
+}
 """
 
 
@@ -354,6 +373,15 @@ class FlowLayout(QLayout):
             return self._items.pop(index)
         return None
 
+    def clear(self):
+        """Удаляет все виджеты из лэйаута (перезагрузка сетки)."""
+        while self._items:
+            item = self._items.pop()
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+
     def expandingDirections(self):
         return Qt.Orientation(0)
 
@@ -469,6 +497,7 @@ class NavHeaderBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
+        self._layout = layout
 
         self.back_button = QPushButton("‹")
         self.back_button.setObjectName("backButton")
@@ -486,9 +515,15 @@ class NavHeaderBar(QWidget):
         self.end_layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(self.end_layout)
 
-        spacer = QWidget()
-        spacer.setFixedWidth(32)
-        layout.addWidget(spacer)
+        # Симметричный отступ справа, чтобы заголовок оставался по центру,
+        # когда слева видна кнопка «назад» или иконка «О программе».
+        self._spacer = QWidget()
+        self._spacer.setFixedWidth(32)
+        layout.addWidget(self._spacer)
+
+    def add_start_widget(self, widget: QWidget):
+        """Добавляет виджет слева, сразу после кнопки «назад»."""
+        self._layout.insertWidget(1, widget)
 
     def add_end_widget(self, widget: QWidget):
         self.end_layout.addWidget(widget)

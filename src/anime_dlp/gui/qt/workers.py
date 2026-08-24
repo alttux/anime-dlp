@@ -9,7 +9,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from anime_dlp.core.anime_service import (
     get_download_link,
-    get_popular_anime,
+    get_genre_cover,
     search_anime,
 )
 from anime_dlp.core.cache import fetch_image_cached
@@ -69,21 +69,48 @@ class PosterWorker(QThread):
         self.finished_poster.emit(data, error)
 
 
-class PopularWorker(QThread):
-    finished_popular = pyqtSignal(list, str, bool, str)
+class CatalogWorker(QThread):
+    """Одна страница сетки обложек. loader — (cursor, limit) -> (items,
+    next_cursor): популярное на «Главном» или конкретный жанр."""
 
-    def __init__(self, cursor: str | None, limit: int, parent=None):
+    finished_page = pyqtSignal(list, str, str, int)
+
+    def __init__(self, loader, cursor: str | None, limit: int, generation: int, parent=None):
         super().__init__(parent)
+        self.loader = loader
         self.cursor = cursor
         self.limit = limit
+        self.generation = generation
 
     def run(self):
         try:
-            items, next_cursor = get_popular_anime(cursor=self.cursor, limit=self.limit)
+            items, next_cursor = self.loader(self.cursor, self.limit)
             error = ""
         except Exception as exc:
             items, next_cursor, error = [], None, str(exc)
-        self.finished_popular.emit(items, next_cursor or "", bool(next_cursor), error)
+        self.finished_page.emit(items, next_cursor or "", error, self.generation)
+
+
+class GenreCoversWorker(QThread):
+    """Ищет обложку (топ-1 аниме) для каждого жанра по очереди и отдаёт их по
+    одной. Последовательно, а не пулом: при холодном кэше это 19 запросов к
+    Kodik, устраивать из них шторм незачем — карточки заполняются по ходу."""
+
+    cover_ready = pyqtSignal(str, dict, int)
+
+    def __init__(self, genres: list[str], generation: int, parent=None):
+        super().__init__(parent)
+        self.genres = genres
+        self.generation = generation
+
+    def run(self):
+        for genre in self.genres:
+            try:
+                item = get_genre_cover(genre)
+            except Exception:
+                continue
+            if item:
+                self.cover_ready.emit(genre, item, self.generation)
 
 
 class DownloadWorker(QThread):

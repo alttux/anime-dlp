@@ -1,9 +1,10 @@
 from PyQt6.QtWidgets import QProgressBar, QScrollArea, QVBoxLayout, QWidget
 
+from anime_dlp.core.anime_service import get_popular_anime
 from anime_dlp.gui import prefetch
 from anime_dlp.gui.qt.cover_card import CoverCard
 from anime_dlp.gui.qt.widgets import FlowLayout
-from anime_dlp.gui.qt.workers import PopularWorker
+from anime_dlp.gui.qt.workers import CatalogWorker
 
 # Насколько близко к концу прокрутки нужно оказаться, чтобы подгрузить
 # следующую пачку (в пикселях значения скроллбара).
@@ -11,14 +12,22 @@ _SCROLL_THRESHOLD = 200
 
 
 class CatalogTab(QWidget):
+    """Сетка обложек с бесконечной прокруткой. loader — источник страниц с
+    сигнатурой (cursor, limit) -> (items, next_cursor); по умолчанию это
+    популярное («Главное»), страница жанра передаёт сюда get_genre_anime."""
+
     PAGE_SIZE = 10
 
-    def __init__(self, window):
+    def __init__(self, window, loader=None):
         super().__init__()
         self.window = window
+        self._loader = loader or get_popular_anime
         self._next_cursor: str | None = None
         self._loading = False
-        self._worker: PopularWorker | None = None
+        self._worker: CatalogWorker | None = None
+        # Растёт при reload(): ответы запросов, стартовавших до перезагрузки,
+        # игнорируются, иначе они дорисовали бы старые карточки в новую сетку.
+        self._generation = 0
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
@@ -46,16 +55,28 @@ class CatalogTab(QWidget):
 
         self._load_page()
 
+    def reload(self):
+        """Полная перезагрузка сетки с первой страницы (кнопка «Обновить»)."""
+        self._generation += 1
+        self._loading = False
+        self._next_cursor = None
+        self.flow_layout.clear()
+        self._load_page()
+
     def _load_page(self):
         if self._loading:
             return
         self._loading = True
         self.spinner.setVisible(True)
-        self._worker = PopularWorker(self._next_cursor, self.PAGE_SIZE, parent=self)
-        self._worker.finished_popular.connect(self._on_page_loaded)
+        self._worker = CatalogWorker(
+            self._loader, self._next_cursor, self.PAGE_SIZE, self._generation, parent=self
+        )
+        self._worker.finished_page.connect(self._on_page_loaded)
         self._worker.start()
 
-    def _on_page_loaded(self, items: list, next_cursor: str, has_next: bool, error: str):
+    def _on_page_loaded(self, items: list, next_cursor: str, error: str, generation: int):
+        if generation != self._generation:
+            return
         self._loading = False
         self.spinner.setVisible(False)
         if error:

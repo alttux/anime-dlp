@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from anime_dlp.core import favorites
 from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
 from anime_dlp.gui.qt.pixmap_utils import round_pixmap
 from anime_dlp.gui.qt.widgets import ActionRow, ComboRow, FlowLayout, NavHeaderBar, PreferencesGroup
@@ -203,9 +204,22 @@ class DetailsPage(QWidget):
         title_label.setObjectName("title1")
         title_label.setWordWrap(True)
 
+        self.favorite_button = QPushButton()
+        self.favorite_button.setObjectName("starButton")
+        self.favorite_button.setCheckable(True)
+        self.favorite_button.setChecked(favorites.is_favorite(self.item.get("shikimori_id")))
+        self.favorite_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sync_favorite_button()
+        self.favorite_button.clicked.connect(self._on_favorite_toggled)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(6)
+        title_row.addWidget(title_label, 1)
+        title_row.addWidget(self.favorite_button, 0, Qt.AlignmentFlag.AlignTop)
+
         text_box = QVBoxLayout()
         text_box.setSpacing(6)
-        text_box.addWidget(title_label)
+        text_box.addLayout(title_row)
 
         if info.title_orig:
             subtitle_label = QLabel(info.title_orig)
@@ -228,6 +242,23 @@ class DetailsPage(QWidget):
         header_row.addWidget(self.poster_label)
         header_row.addLayout(text_box, 1)
         return header_row
+
+    def _sync_favorite_button(self):
+        is_favorite = self.favorite_button.isChecked()
+        self.favorite_button.setText("★" if is_favorite else "☆")
+        self.favorite_button.setToolTip(
+            "Убрать из избранного" if is_favorite else "Добавить в избранное"
+        )
+
+    def _on_favorite_toggled(self):
+        # Кнопка уже переключилась визуально — приводим хранилище в то же
+        # состояние (toggle() сам решает, добавить или удалить).
+        is_favorite = favorites.toggle(self.item)
+        self.favorite_button.setChecked(is_favorite)
+        self._sync_favorite_button()
+        self.window.show_toast(
+            "Добавлено в избранное" if is_favorite else "Удалено из избранного"
+        )
 
     @staticmethod
     def _build_genre_pills(genres: list[str]) -> QWidget | None:

@@ -12,7 +12,11 @@ _RADIUS = 8
 
 
 class CoverCard(QFrame):
-    def __init__(self, item: dict, on_click, parent=None):
+    """Обложка + подпись. item=None и title=... — карточка без записи аниме
+    (так сделаны карточки жанров в «Категориях»): подпись показывается сразу,
+    а обложка привязывается позже через set_item(), когда её найдут в фоне."""
+
+    def __init__(self, item: dict | None, on_click, title: str | None = None, parent=None):
         super().__init__(parent)
         self.setObjectName("coverCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -33,14 +37,24 @@ class CoverCard(QFrame):
         )
         layout.addWidget(self.poster_label)
 
-        title_label = QLabel(item.get("title", "Unknown"))
+        title_label = QLabel(title or (item or {}).get("title", "Unknown"))
         title_label.setWordWrap(True)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setMaximumHeight(40)
         layout.addWidget(title_label)
 
         self._poster_worker: PosterWorker | None = None
-        poster_url = extract_anime_info(item).poster_url
+        if item is not None:
+            self._start_poster_load()
+
+    def set_item(self, item: dict):
+        """Привязывает запись аниме к уже показанной карточке и подгружает
+        её обложку."""
+        self._item = item
+        self._start_poster_load()
+
+    def _start_poster_load(self):
+        poster_url = extract_anime_info(self._item).poster_url
         if poster_url:
             self._poster_worker = PosterWorker(poster_url, parent=self)
             self._poster_worker.finished_poster.connect(self._on_poster_loaded)
