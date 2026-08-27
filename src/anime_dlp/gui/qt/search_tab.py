@@ -72,11 +72,6 @@ class SearchTab(QWidget):
         self.stack.setCurrentWidget(self.empty_page)
         body_layout.addWidget(self.stack, 1)
 
-    def build_interface_button(self):
-        # Привязка к сетевому интерфейсу — Linux-only фича, в Qt-бэкенде не
-        # показывается (core.network.SUPPORTED всегда False на Windows).
-        return None
-
     def reload(self):
         """Повторяет текущий запрос (кнопка «Обновить»). Кэш к этому моменту
         уже очищен, поэтому результаты придут из сети."""

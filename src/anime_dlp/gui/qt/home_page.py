@@ -75,10 +75,6 @@ class HomePage(QWidget):
         self.refresh_button.clicked.connect(self._on_refresh_clicked)
         header.add_end_widget(self.refresh_button)
 
-        interface_button = self.search_tab.build_interface_button()
-        if interface_button is not None:
-            header.add_end_widget(interface_button)
-
     def _on_tab_changed(self, index: int):
         self.stack.setCurrentIndex(index)
         # Звёздочку могли поставить на странице аниме, пока вкладка была

@@ -41,9 +41,6 @@ class HomePage(Adw.NavigationPage):
         header.pack_end(self.refresh_button)
 
         self.search_tab = SearchTab(window=window)
-        interface_button = self.search_tab.build_interface_button()
-        if interface_button is not None:
-            header.pack_end(interface_button)
         toolbar_view.add_top_bar(header)
 
         self.catalog_tab = CatalogTab(window=window)

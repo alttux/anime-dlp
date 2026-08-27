@@ -2,7 +2,6 @@ import threading
 
 from gi.repository import Adw, GLib, Gtk
 
-from anime_dlp.core import network
 from anime_dlp.core.anime_service import search_anime
 from anime_dlp.gui import prefetch
 from anime_dlp.labels import TYPE_MAP
@@ -15,14 +14,6 @@ class SearchTab(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.window = window
         self._debounce_id = None
-        self.interface_button = None
-
-        if network.SUPPORTED:
-            self.interface_button = Gtk.MenuButton(
-                icon_name="network-wired-symbolic",
-                tooltip_text=self._interface_tooltip(),
-            )
-            self._build_interface_popover()
 
         self.set_margin_top(12)
         self.set_margin_bottom(12)
@@ -61,9 +52,6 @@ class SearchTab(Gtk.Box):
 
         self.stack.set_visible_child_name("empty")
         self.append(self.stack)
-
-    def build_interface_button(self) -> Gtk.MenuButton | None:
-        return self.interface_button
 
     def reload(self):
         """Повторяет текущий запрос (кнопка «Обновить»). Кэш к этому моменту
@@ -143,38 +131,3 @@ class SearchTab(Gtk.Box):
         from anime_dlp.gui.gtk.details_page import DetailsPage
 
         self.window.push_page(DetailsPage(window=self.window, item=item))
-
-    def _interface_tooltip(self) -> str:
-        current = network.get_current_interface()
-        return f"Интерфейс: {current}" if current else "Сетевой интерфейс: системный"
-
-    def _build_interface_popover(self):
-        popover = Gtk.Popover()
-        listbox = Gtk.ListBox(css_classes=["boxed-list"])
-        listbox.set_selection_mode(Gtk.SelectionMode.NONE)
-
-        current = network.get_current_interface()
-
-        default_row = Adw.ActionRow(
-            title="Системный (по умолчанию)", activatable=True
-        )
-        if current is None:
-            default_row.add_suffix(Gtk.Image.new_from_icon_name("object-select-symbolic"))
-        default_row.connect("activated", self._on_interface_selected, None, popover)
-        listbox.append(default_row)
-
-        for name in network.list_interfaces():
-            row = Adw.ActionRow(title=name, activatable=True)
-            if name == current:
-                row.add_suffix(Gtk.Image.new_from_icon_name("object-select-symbolic"))
-            row.connect("activated", self._on_interface_selected, name, popover)
-            listbox.append(row)
-
-        popover.set_child(listbox)
-        self.interface_button.set_popover(popover)
-
-    def _on_interface_selected(self, row, interface: str | None, popover):
-        network.bind_to_interface(interface)
-        popover.popdown()
-        self.interface_button.set_tooltip_text(self._interface_tooltip())
-        self._build_interface_popover()

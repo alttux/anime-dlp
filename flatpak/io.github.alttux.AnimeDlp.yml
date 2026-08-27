@@ -5,8 +5,7 @@ sdk: org.gnome.Sdk
 command: anime-dlp
 
 finish-args:
-  # Сеть нужна и для Kodik, и для ffmpeg; заодно даёт доступ к списку
-  # сетевых интерфейсов для флага -i/--interface.
+  # Сеть нужна и для Kodik, и для ffmpeg.
   - --share=network
   - --share=ipc
   - --socket=wayland
