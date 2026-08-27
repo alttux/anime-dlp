@@ -60,6 +60,11 @@ class CoverCard(QFrame):
             self._poster_worker.finished_poster.connect(self._on_poster_loaded)
             self._poster_worker.start()
 
+    def set_static_cover(self, data: bytes):
+        """Показывает готовые байты обложки напрямую, без сетевого запроса
+        (карточки жанров — статичные постеры из gui/genre_posters.py)."""
+        self._on_poster_loaded(data, "")
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._on_click(self._item)

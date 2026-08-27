@@ -41,3 +41,6 @@ anime-dlp = "anime_dlp.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+anime_dlp = ["gui/assets/genre_posters/*.jpg"]

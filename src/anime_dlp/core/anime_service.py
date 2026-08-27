@@ -190,28 +190,6 @@ def get_genre_anime(
     return _list_anime(f"genre:{genre}", genre, cursor, limit)
 
 
-_GENRE_COVER_CANDIDATES = 6
-
-
-def get_genre_cover(genre: str, exclude_ids=()) -> dict | None:
-    """Обложка для карточки жанра в «Категориях» — топ-1 аниме этого жанра.
-
-    exclude_ids позволяет пропустить тайтлы, уже занятые другими жанрами: у
-    самых высокорейтинговых аниме проставлено по 4-5 жанров сразу, поэтому без
-    этого половина карточек показывала бы один и тот же постер. Если все
-    кандидаты заняты, возвращается всё-таки первый — пустая карточка хуже
-    повтора.
-    """
-    items, _ = get_genre_anime(genre, limit=_GENRE_COVER_CANDIDATES)
-    if not items:
-        return None
-    excluded = set(exclude_ids)
-    for item in items:
-        if item.get("shikimori_id") not in excluded:
-            return item
-    return items[0]
-
-
 def get_download_link(
     shikimori_id: str, episode: int, translation_id: str
 ) -> tuple[str, int, list]:

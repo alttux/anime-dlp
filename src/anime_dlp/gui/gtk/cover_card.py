@@ -49,6 +49,11 @@ class CoverCard(Gtk.Button):
         self._item = item
         self._start_poster_load()
 
+    def set_static_cover(self, data: bytes):
+        """Показывает готовые байты обложки напрямую, без сетевого запроса
+        (карточки жанров — статичные постеры из gui/genre_posters.py)."""
+        self._on_poster_loaded(data)
+
     def _start_poster_load(self):
         poster_url = extract_anime_info(self._item).poster_url
         if poster_url:

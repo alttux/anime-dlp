@@ -93,12 +93,15 @@ $ anime-dlp -d ~/Videos/Anime
 2. **Категории** (`categories_tab.py`) — сетка из 19 жанров
    (`anime_service.GENRES` = `Api.AnimeGenres.get_list()`, те же строки, что
    Kodik кладёт в `material_data["anime_genres"]` и что показываются
-   бейджами на странице аниме). Обложка карточки жанра — топ-1 аниме этого
-   жанра, причём уже занятые другими жанрами тайтлы пропускаются
-   (`get_genre_cover(genre, exclude_ids)`): у высокорейтинговых аниме по 4-5
-   жанров, иначе половина карточек показывала бы один постер. Клик открывает
-   `genre_page.py` — тот же `CatalogTab`, но с `get_genre_anime` в качестве
-   загрузчика страниц.
+   бейджами на странице аниме). Обложка карточки жанра — не постер аниме, а
+   статичная картинка, сгенерированная нейросетью (NanoBanana) под смысл
+   жанра (промпты — в `genre-posters-prompts/` в корне репозитория);
+   `gui/genre_posters.get_genre_poster(genre)` отдаёт её байты из
+   `gui/assets/genre_posters/*.jpg`, входящих в сам пакет (см.
+   `[tool.setuptools.package-data]` в `pyproject.toml`), поэтому карточки
+   собираются сразу целиком, без фоновой сетевой подгрузки и без кэша. Клик
+   открывает `genre_page.py` — тот же `CatalogTab`, но с `get_genre_anime` в
+   качестве загрузчика страниц (там обложки уже настоящие, по аниме).
 3. **Избранное** (`favorites_tab.py`) — аниме, отмеченные звёздочкой рядом с
    названием на странице аниме. Хранится списком полных записей Kodik в
    `DATA_DIR/favorites.json` (`core/favorites.py`), поэтому вкладка рисуется
@@ -155,6 +158,8 @@ anime-dlp/
 │   │   ├── formatting.py          # Форматирование размера/скорости (общее для gtk/ и qt/)
 │   │   ├── prefetch.py            # Фоновая предзагрузка озвучек/серий (общая для gtk/ и qt/)
 │   │   ├── refresh.py             # Очистка всех кэшей и токена по кнопке «Обновить»
+│   │   ├── genre_posters.py       # Статичные AI-обложки жанров (общее для gtk/ и qt/, см. assets/)
+│   │   ├── assets/genre_posters/  # 19 JPG-обложек жанров, входят в пакет (package-data)
 │   │   ├── gtk/                   # Бэкенд GTK4 + libadwaita (Linux/macOS)
 │   │   │   ├── app.py             # Точка входа GUI, Adw.Application, глобальный CSS
 │   │   │   ├── window.py          # Главное окно, Adw.NavigationView, тосты
@@ -209,6 +214,7 @@ anime-dlp/
 ├── scripts/
 │   └── bump_version.py            # Увеличивает patch-версию в pyproject.toml и metainfo.xml на 1
 ├── screenshots/                   # Скриншоты GUI для README
+├── genre-posters-prompts/         # Промпты NanoBanana для AI-обложек жанров (сами картинки — в пакете, gui/assets/genre_posters/)
 ├── .github/workflows/
 │   ├── flatpak.yml                # CI: сборка Flatpak (Linux)
 │   ├── windows-build.yml          # CI: сборка Windows CLI .exe и GUI .exe (PyQt6, PyInstaller)
@@ -261,14 +267,20 @@ anime-dlp/
   wheel/sdist в `dist/`.
 - Flatpak: `./flatpak/build.sh` — добавляет remote flathub, ставит
   рантайм/SDK при отсутствии, собирает и упаковывает
-  `anime-dlp-<версия>.flatpak` в корень проекта.
+  `anime-dlp-<версия>.flatpak` в корень проекта. Манифест ставит пакет через
+  обычный `pip3 install .` из исходников (`io.github.alttux.AnimeDlp.yml`),
+  поэтому AI-обложки жанров попадают в сборку сами, через
+  `[tool.setuptools.package-data]` в `pyproject.toml` — отдельных шагов в
+  манифесте для них не нужно.
 - macOS (GitHub Actions, `.github/workflows/macos-build.yml`, `runs-on:
   macos-14`, только `aarch64`): ставит GTK4/libadwaita/PyGObject через
   Homebrew, генерирует иконку (`packaging/macos/make_icns.sh`), собирает
   `dist/AnimeDlp.app` через PyInstaller (`packaging/macos/build.sh` +
   `packaging/macos_gui_entry.py`, GUI запускается напрямую, без
   CLI-диалога, флаг `--copy-metadata anime-dlp` нужен, чтобы
-  `importlib.metadata` работал и внутри собранного бандла), затем шаг
+  `importlib.metadata` работал и внутри собранного бандла; отдельный
+  `--add-data` кладёт `gui/assets/genre_posters/` — AI-обложки категорий —
+  в бандл, иначе `importlib.resources` не найдёт их во frozen-сборке), затем шаг
   «Set app bundle version» прописывает `CFBundleShortVersionString`/
   `CFBundleVersion` в `Info.plist` через `PlistBuddy`, упаковывает в `.dmg`
   через `create-dmg` и прикрепляет его к GitHub Release при вызове из
@@ -280,8 +292,10 @@ anime-dlp/
   `--windowed`) через PyInstaller (`packaging/windows_gui_entry.py`,
   иконка `packaging/windows/AnimeDlp.ico`) — в отличие от GTK4/libadwaita,
   у PyQt6 есть готовые pip-колёса под Windows, поэтому сборка полностью
-  автоматическая, без MSYS2. Оба вызова PyInstaller получают
-  `--copy-metadata anime-dlp` (тот же смысл, что и на macOS) и
+  автоматическая, без MSYS2; сборка `build-gui` тоже получает `--add-data`
+  для `gui/assets/genre_posters/` (тот же смысл, что на macOS). Оба вызова
+  PyInstaller получают `--copy-metadata anime-dlp` (тот же смысл, что и на
+  macOS) и
   `--version-file` со сгенерированным на лету VSVersionInfo-ресурсом (шаг
   «Generate Windows version resource» — вручную собирает `.txt` в формате
   `PyInstaller.utils.win32.versioninfo`, без сторонних пакетов), поэтому у

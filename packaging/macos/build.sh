@@ -29,6 +29,7 @@ pyinstaller \
   --add-data "$BREW_PREFIX/share/glib-2.0/schemas:share/glib-2.0/schemas" \
   --add-data "$BREW_PREFIX/share/icons/Adwaita:share/icons/Adwaita" \
   --add-data "$BREW_PREFIX/share/icons/hicolor:share/icons/hicolor" \
+  --add-data "src/anime_dlp/gui/assets/genre_posters:anime_dlp/gui/assets/genre_posters" \
   packaging/macos_gui_entry.py
 
 echo "=== DEBUG: Build finished, dist/${APP_NAME}.app ==="

@@ -7,11 +7,7 @@ from pathlib import Path
 import requests
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from anime_dlp.core.anime_service import (
-    get_download_link,
-    get_genre_cover,
-    search_anime,
-)
+from anime_dlp.core.anime_service import get_download_link, search_anime
 from anime_dlp.core.cache import fetch_image_cached
 from anime_dlp.core.downloader import download_episode
 from anime_dlp.filenames import sanitize_filename
@@ -89,30 +85,6 @@ class CatalogWorker(QThread):
         except Exception as exc:
             items, next_cursor, error = [], None, str(exc)
         self.finished_page.emit(items, next_cursor or "", error, self.generation)
-
-
-class GenreCoversWorker(QThread):
-    """Ищет обложку (топ-1 аниме) для каждого жанра по очереди и отдаёт их по
-    одной. Последовательно, а не пулом: при холодном кэше это 19 запросов к
-    Kodik, устраивать из них шторм незачем — карточки заполняются по ходу."""
-
-    cover_ready = pyqtSignal(str, dict, int)
-
-    def __init__(self, genres: list[str], generation: int, parent=None):
-        super().__init__(parent)
-        self.genres = genres
-        self.generation = generation
-
-    def run(self):
-        used_ids: set[str] = set()
-        for genre in self.genres:
-            try:
-                item = get_genre_cover(genre, used_ids)
-            except Exception:
-                continue
-            if item:
-                used_ids.add(item.get("shikimori_id"))
-                self.cover_ready.emit(genre, item, self.generation)
 
 
 class DownloadWorker(QThread):

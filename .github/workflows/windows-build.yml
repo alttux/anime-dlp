@@ -196,6 +196,7 @@ jobs:
             --collect-all anime_parsers_ru `
             --copy-metadata anime-dlp `
             --version-file version_info.txt `
+            --add-data "src/anime_dlp/gui/assets/genre_posters;anime_dlp/gui/assets/genre_posters" `
             packaging/windows_gui_entry.py
 
       - name: Rename artifact
