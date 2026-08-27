@@ -107,7 +107,7 @@ class _FileRow:
         show_button.connect("clicked", self._on_show_in_folder_clicked)
         self.box.append(show_button)
 
-        self.row.add_suffix(Gtk.Image.new_from_icon_name("emblem-ok-symbolic"))
+        self.row.add_suffix(Gtk.Image.new_from_icon_name("object-select-symbolic"))
 
     def _on_open_clicked(self, button):
         _launch_file(self.window, self.filepath)
@@ -161,7 +161,7 @@ class DownloadPage(Adw.NavigationPage):
         self.stack.add_named(progress_scrolled, "progress")
 
         self.done_status_page = Adw.StatusPage(
-            icon_name="emblem-ok-symbolic", title="Готово!"
+            icon_name="object-select-symbolic", title="Готово!"
         )
         done_scrolled = Gtk.ScrolledWindow(vexpand=True)
         done_scrolled.set_child(self.done_status_page)
