@@ -69,7 +69,7 @@ class CatalogTab(QWidget):
         self._loading = True
         self.spinner.setVisible(True)
         self._worker = CatalogWorker(
-            self._loader, self._next_cursor, self.PAGE_SIZE, self._generation, parent=self
+            self._loader, self._next_cursor, self.PAGE_SIZE, self._generation
         )
         self._worker.finished_page.connect(self._on_page_loaded)
         self._worker.start()

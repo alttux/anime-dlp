@@ -13,12 +13,57 @@ from anime_dlp.core.downloader import download_episode
 from anime_dlp.filenames import sanitize_filename
 from anime_dlp.gui import prefetch
 
+# Живые воркеры, ещё не завершившие run(). Смысл — держать ссылку на
+# Python-обёртку QThread на всё время работы потока: у воркеров больше нет
+# родителя-виджета (см. ниже), поэтому обёртку никто, кроме этого множества,
+# не удерживает. Если её соберёт GC, пока поток работает, PyQt вызовет
+# C++-delete у ещё живого QThread → Qt делает qFatal()/abort() ("QThread:
+# Destroyed while thread is still running"). Раньше эту роль играл parent=<виджет>,
+# но виджет уничтожается при навигации/reload раньше, чем поток дочитает сеть.
+#
+# Меняется только из главного потока: конструирование воркеров происходит в
+# __init__ виджетов, _cleanup приходит очередью в главный цикл, stop_all_workers
+# вызывается из aboutToQuit. Поэтому блокировка не нужна.
+_active_workers: set["_BaseWorker"] = set()
 
-class SearchWorker(QThread):
+
+class _BaseWorker(QThread):
+    """База для всех фоновых воркеров: без родителя, сам себя регистрирует на
+    время работы и сам себя удаляет после завершения (fire-and-forget)."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName(type(self).__name__)
+        _active_workers.add(self)
+        self.finished.connect(self._cleanup)
+
+    def _cleanup(self):
+        # finished доставляется очередью в главный поток уже после возврата из
+        # run(), поэтому deleteLater() здесь безопасен; wait() звать нельзя.
+        _active_workers.discard(self)
+        self.deleteLater()
+
+
+def stop_all_workers(wait_ms: int = 3000) -> None:
+    """Останавливает все ещё работающие воркеры при выходе из приложения.
+    Сначала вежливо (requestInterruption + ожидание), затем принудительно."""
+    for worker in list(_active_workers):
+        try:
+            worker.requestInterruption()
+            if not worker.wait(wait_ms):
+                worker.terminate()
+                worker.wait()
+        except RuntimeError:
+            # Обёртка C++-объекта уже удалена — воркер и так завершён.
+            pass
+    _active_workers.clear()
+
+
+class SearchWorker(_BaseWorker):
     finished_search = pyqtSignal(str, list, str)
 
-    def __init__(self, query: str, parent=None):
-        super().__init__(parent)
+    def __init__(self, query: str):
+        super().__init__()
         self.query = query
 
     def run(self):
@@ -31,11 +76,11 @@ class SearchWorker(QThread):
         self.finished_search.emit(self.query, items, error)
 
 
-class AnimeInfoWorker(QThread):
+class AnimeInfoWorker(_BaseWorker):
     finished_info = pyqtSignal(dict, str)
 
-    def __init__(self, shikimori_id: str, parent=None):
-        super().__init__(parent)
+    def __init__(self, shikimori_id: str):
+        super().__init__()
         self.shikimori_id = shikimori_id
 
     def run(self):
@@ -48,11 +93,11 @@ class AnimeInfoWorker(QThread):
         self.finished_info.emit(info, error)
 
 
-class PosterWorker(QThread):
+class PosterWorker(_BaseWorker):
     finished_poster = pyqtSignal(bytes, str)
 
-    def __init__(self, url: str, parent=None):
-        super().__init__(parent)
+    def __init__(self, url: str):
+        super().__init__()
         self.url = url
 
     def run(self):
@@ -65,14 +110,14 @@ class PosterWorker(QThread):
         self.finished_poster.emit(data, error)
 
 
-class CatalogWorker(QThread):
+class CatalogWorker(_BaseWorker):
     """Одна страница сетки обложек. loader — (cursor, limit) -> (items,
     next_cursor): популярное на «Главном» или конкретный жанр."""
 
     finished_page = pyqtSignal(list, str, str, int)
 
-    def __init__(self, loader, cursor: str | None, limit: int, generation: int, parent=None):
-        super().__init__(parent)
+    def __init__(self, loader, cursor: str | None, limit: int, generation: int):
+        super().__init__()
         self.loader = loader
         self.cursor = cursor
         self.limit = limit
@@ -87,7 +132,7 @@ class CatalogWorker(QThread):
         self.finished_page.emit(items, next_cursor or "", error, self.generation)
 
 
-class DownloadWorker(QThread):
+class DownloadWorker(_BaseWorker):
     file_started = pyqtSignal(str, str, int, int)
     file_progress = pyqtSignal(str, int, int)
     file_done = pyqtSignal(str, str)
@@ -101,9 +146,8 @@ class DownloadWorker(QThread):
         translation_id: str,
         eps_to_download: list[int],
         download_dir: Path,
-        parent=None,
     ):
-        super().__init__(parent)
+        super().__init__()
         self.item = item
         self.translation_id = translation_id
         self.eps_to_download = eps_to_download
@@ -115,6 +159,8 @@ class DownloadWorker(QThread):
             total = len(self.eps_to_download)
             started: set[str] = set()
             for index, ep in enumerate(self.eps_to_download, 1):
+                if self.isInterruptionRequested():
+                    break
                 safe_title = sanitize_filename(self.item["title"])
                 filename = f"{safe_title}.mp4" if ep == 0 else f"{ep}.mp4"
                 filepath = self.download_dir / filename

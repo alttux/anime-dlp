@@ -92,7 +92,7 @@ class SearchTab(QWidget):
             self.stack.setCurrentWidget(self.empty_page)
             return
         self.stack.setCurrentIndex(1)  # loading
-        self._worker = SearchWorker(text, parent=self)
+        self._worker = SearchWorker(text)
         self._worker.finished_search.connect(self._on_search_results)
         self._worker.start()
 

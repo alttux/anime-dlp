@@ -120,14 +120,14 @@ class DetailsPage(QWidget):
 
         outer.addWidget(content_container, 1)
 
-        self._info_worker = AnimeInfoWorker(item["shikimori_id"], parent=self)
+        self._info_worker = AnimeInfoWorker(item["shikimori_id"])
         self._info_worker.finished_info.connect(self._on_info_loaded)
         self._info_worker.start()
 
         self._poster_worker = None
         poster_url = extract_anime_info(self.item).poster_url
         if poster_url:
-            self._poster_worker = PosterWorker(poster_url, parent=self)
+            self._poster_worker = PosterWorker(poster_url)
             self._poster_worker.finished_poster.connect(self._on_poster_loaded)
             self._poster_worker.start()
 
@@ -156,7 +156,7 @@ class DetailsPage(QWidget):
     def _on_info_loaded(self, info: dict, error: str):
         if error or not info:
             self.window.show_toast(f"Ошибка получения информации: {error}")
-            self.window.pop_page()
+            self.window.pop_page(self)
             return
 
         self.translations = info["translations"]

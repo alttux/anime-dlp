@@ -141,13 +141,13 @@ class DownloadPage(QWidget):
         self.stack.setCurrentIndex(0)
         outer.addWidget(self.stack, 1)
 
-        self._worker = DownloadWorker(item, translation_id, eps_to_download, download_dir, parent=self)
+        self._worker = DownloadWorker(item, translation_id, eps_to_download, download_dir)
         self._worker.file_started.connect(self._on_file_start)
         self._worker.file_progress.connect(self._on_file_progress)
         self._worker.file_done.connect(self._on_file_done)
         self._worker.file_error.connect(self._on_file_error)
         self._worker.all_done.connect(self._on_all_done)
-        self._worker.fatal_error.connect(lambda msg: self.window.show_toast(f"Ошибка: {msg}"))
+        self._worker.fatal_error.connect(self._on_fatal_error)
         self._worker.start()
 
     def _on_file_start(self, filename: str, filepath: str, index: int, total: int):
@@ -172,6 +172,11 @@ class DownloadPage(QWidget):
         if row:
             row.set_error(message)
         self.window.show_toast(f"Ошибка скачивания {filename}: {message}")
+
+    def _on_fatal_error(self, message: str):
+        # Раньше был lambda. Связанный метод Qt автоматически отвязывает, если
+        # страницу успели удалить (воркер теперь переживает свою страницу).
+        self.window.show_toast(f"Ошибка: {message}")
 
     def _on_all_done(self):
         self.summary_label.setText(f"Готово! Файлы сохранены в {self.download_dir}")

@@ -56,7 +56,7 @@ class CoverCard(QFrame):
     def _start_poster_load(self):
         poster_url = extract_anime_info(self._item).poster_url
         if poster_url:
-            self._poster_worker = PosterWorker(poster_url, parent=self)
+            self._poster_worker = PosterWorker(poster_url)
             self._poster_worker.finished_poster.connect(self._on_poster_loaded)
             self._poster_worker.start()
 
