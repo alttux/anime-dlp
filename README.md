@@ -313,15 +313,26 @@ anime-dlp --gui
 затрагивается.
 
 <p align="center">
-  <img src="screenshots/img.png" width="49%" alt="Поиск аниме" />
-  <img src="screenshots/img_1.png" width="49%" alt="Выбор озвучки и серий" />
+  <img src="screenshots/screenshot_1.png" width="49%" alt="Главая" />
+  <img src="screenshots/screenshot_2.png" width="49%" alt="Категории" />
+  <img src="screenshots/screenshot_3.png" width="49%" alt="Избранное" />
+  <img src="screenshots/screenshot_6.png" width="49%" alt="О программе" />
 </p>
 <p align="center">
-  <img src="screenshots/img_2.png" width="49%" alt="Выбор папки для скачивания" />
-  <img src="screenshots/img_3.png" width="49%" alt="Прогресс скачивания" />
+  <img src="screenshots/screenshot_5.png" width="49%" alt="Поиск на русском" />
+  <img src="screenshots/screenshot_4.png" width="49%" alt="Поиск на английском" />
 </p>
 <p align="center">
-  <img src="screenshots/img_4.png" width="49%" alt="Готово — открыть файл или показать в папке" />
+  <img src="screenshots/screenshot_7.png" width="49%" alt="Информация об аниме" />
+  <img src="screenshots/screenshot_8.png" width="49%" alt="Выбор озвучки" />
+  <img src="screenshots/screenshot_9.png" width="49%" alt="Выбор серий для скачивания" />
+  <img src="screenshots/screenshot_10.png" width="49%" alt="Скачивание аниме" />
+</p>
+<p align="center">
+  <img src="screenshots/screenshot_11.png" width="49%" alt="Страница после загрузки" />
+</p>
+<p align="center">
+  
 </p>
 
 ### Аргументы командной строки
