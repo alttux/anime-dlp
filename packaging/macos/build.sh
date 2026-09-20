@@ -9,6 +9,8 @@ BREW_PREFIX="$(brew --prefix)"
 
 export GI_TYPELIB_PATH="$BREW_PREFIX/lib/girepository-1.0"
 export DYLD_LIBRARY_PATH="$BREW_PREFIX/lib:${DYLD_LIBRARY_PATH:-}"
+export GST_PLUGIN_PATH="$BREW_PREFIX/lib/gstreamer-1.0"
+export GST_PLUGIN_SCANNER="$BREW_PREFIX/opt/gstreamer/libexec/gstreamer-1.0/gst-plugin-scanner"
 export PKG_CONFIG_PATH="$BREW_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 export XDG_DATA_DIRS="$BREW_PREFIX/share:${XDG_DATA_DIRS:-}"
 
@@ -25,7 +27,11 @@ pyinstaller \
   --collect-all anime_parsers_ru \
   --copy-metadata anime-dlp \
   --hidden-import gi \
+  --hidden-import gi.repository.Gst \
+  --hidden-import gi.repository.GstVideo \
   --add-data "$GI_TYPELIB_PATH:gi_typelibs" \
+  --add-data "$BREW_PREFIX/lib/gstreamer-1.0:gstreamer-plugins" \
+  --add-data "$BREW_PREFIX/opt/gstreamer/libexec/gstreamer-1.0:gst-plugin-scanner" \
   --add-data "$BREW_PREFIX/share/glib-2.0/schemas:share/glib-2.0/schemas" \
   --add-data "$BREW_PREFIX/share/icons/Adwaita:share/icons/Adwaita" \
   --add-data "$BREW_PREFIX/share/icons/hicolor:share/icons/hicolor" \

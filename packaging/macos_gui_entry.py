@@ -24,6 +24,10 @@ if getattr(sys, "frozen", False):
     os.environ["GSETTINGS_SCHEMA_DIR"] = str(
         bundle_resources / "share" / "glib-2.0" / "schemas"
     )
+    os.environ["GST_PLUGIN_PATH"] = str(bundle_resources / "gstreamer-plugins")
+    os.environ["GST_PLUGIN_SCANNER"] = str(
+        bundle_resources / "gst-plugin-scanner" / "gst-plugin-scanner"
+    )
 
 from anime_dlp.config import DOWNLOAD_DIR
 from anime_dlp.gui import run_gui

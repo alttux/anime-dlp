@@ -194,6 +194,8 @@ jobs:
           pyinstaller --onefile --windowed --name anime-dlp-gui `
             --icon packaging/windows/AnimeDlp.ico `
             --collect-all anime_parsers_ru `
+            --collect-submodules PyQt6.QtMultimedia `
+            --collect-submodules PyQt6.QtMultimediaWidgets `
             --copy-metadata anime-dlp `
             --version-file version_info.txt `
             --add-data "src/anime_dlp/gui/assets/genre_posters;anime_dlp/gui/assets/genre_posters" `

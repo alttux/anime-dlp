@@ -37,6 +37,7 @@
 - 🔎 **Поиск аниме** по названию (поддержка кириллицы) через [anime-parsers-ru](https://github.com/YaNesyTortiK/AnimeParsers)
 - 🎙️ **Выбор озвучки** — программа показывает все доступные варианты озвучки/субтитров
 - 📺 **Скачивание серии, всего сезона или фильма** одной командой
+- ▶️ **Встроенный плеер в GUI** — выбранная озвучка, серии, качество, перемотка и полноэкранный режим
 - ⚡ **Многопоточная загрузка** с докачкой по диапазонам (Range-запросы) для максимальной скорости
 - 📊 **Красивый прогресс-бар** с скоростью загрузки и оставшимся временем ([rich](https://github.com/Textualize/rich))
 - 🗂️ **Указание директории загрузки** через флаг `-d`
@@ -130,8 +131,10 @@ pip install .
 После установки в окружении станет доступна команда `anime-dlp`.
 
 Чтобы использовать графический интерфейс (флаг `--gui`), установите
-дополнительную зависимость `PyGObject`, а также системные пакеты **GTK4** и
-**libadwaita** (в Arch/CachyOS: `gtk4`, `libadwaita`, `python-gobject`):
+дополнительную зависимость `PyGObject`, а также системные пакеты **GTK4**,
+**libadwaita** и **GStreamer** с HLS/кодек-плагинами (в Arch/CachyOS:
+`gtk4`, `libadwaita`, `python-gobject`, `gstreamer`, `gst-plugins-good`,
+`gst-plugins-bad`, `gst-libav`):
 
 ```bash
 pip install -r requirements.txt
@@ -215,11 +218,11 @@ anime-dlp --gui
 <details>
 <summary><b>GUI на macOS — через Homebrew</b></summary>
 
-1. Поставьте [Homebrew](https://brew.sh/), затем GTK4/libadwaita/PyGObject
-   и ffmpeg:
+1. Поставьте [Homebrew](https://brew.sh/), затем GTK4/libadwaita/PyGObject,
+   GStreamer и ffmpeg:
    ```bash
    brew install gtk4 libadwaita pygobject3 adwaita-icon-theme \
-                gobject-introspection ffmpeg
+                gobject-introspection gstreamer ffmpeg
    ```
 2. Создайте виртуальное окружение с доступом к системным пакетам Homebrew
    (иначе Python не увидит PyGObject, поставленный через brew) и установите
@@ -301,7 +304,12 @@ anime-dlp --gui
 | **Поиск**       | Поиск по названию с подсказками по мере ввода                               |
 
 С любой обложки открывается страница аниме: описание, жанры, рейтинг,
-**звёздочка** для добавления в избранное, выбор озвучки и серий. Кнопка
+**звёздочка** для добавления в избранное, выбор озвучки и серий. Значок
+воспроизведения у фильма или серии открывает встроенный плеер с выбранной
+озвучкой. В нём доступны пауза, перемотка на 5 секунд, произвольный переход
+по шкале времени, предыдущее/следующее видео, качество и полноэкранный режим.
+GTK-версия воспроизводит HLS через GStreamer, Windows-версия — через
+QtMultimedia. Кнопка
 **«Скачать»** в правом нижнем углу открывает системный диалог выбора папки,
 после чего скачивание идёт с прогресс-барами по каждому файлу — аналогично
 консольной версии.
@@ -423,6 +431,7 @@ anime-dlp/
 │   │   │   ├── cover_card.py    # Карточка обложки в сетках
 │   │   │   ├── about_dialog.py  # Окно «О программе» (Adw.AboutDialog)
 │   │   │   ├── details_page.py  # Выбор озвучки и серий, звёздочка, кнопка «Скачать»
+│   │   │   ├── player_page.py   # HLS-плеер на GStreamer
 │   │   │   └── download_page.py # Экран скачивания с прогресс-барами
 │   │   └── qt/                  # Бэкенд на PyQt6 (Windows), тот же набор экранов
 │   │       ├── app.py           # Точка входа GUI, QApplication
@@ -439,6 +448,7 @@ anime-dlp/
 │   │       ├── cover_card.py    # Карточка обложки в сетках
 │   │       ├── about_dialog.py  # Окно «О программе»
 │   │       ├── details_page.py  # Выбор озвучки и серий, звёздочка, кнопка «Скачать»
+│   │       ├── player_page.py   # HLS-плеер на QtMultimedia
 │   │       └── download_page.py # Экран скачивания с прогресс-барами
 │   └── core/                   # Основная бизнес-логика
 │       ├── anime_service.py    # Поиск, каталог, жанры и получение ссылок на скачивание
@@ -446,6 +456,7 @@ anime-dlp/
 │       ├── cache.py            # Дисковый кэш обложек и метаданных
 │       ├── favorites.py        # Хранилище избранного (JSON)
 │       ├── downloader.py       # Многопоточное скачивание с колбэком прогресса
+│       ├── playback.py         # Источники HLS и доступные качества Kodik
 │       └── token_manager.py    # Хранение и получение Kodik-токена
 ├── pyproject.toml              # Метаданные и зависимости пакета
 ├── requirements.txt            # Зафиксированные версии зависимостей
@@ -466,7 +477,8 @@ anime-dlp/
 - [requests](https://docs.python-requests.org/) — HTTP-запросы и скачивание файлов
 - [beautifulsoup4](https://www.crummy.com/software/BeautifulSoup/) — парсинг HTML
 - [PyGObject](https://pygobject.gnome.org/) + **GTK4** / **libadwaita** — графический интерфейс на Linux/macOS (опционально, `--gui`)
-- [PyQt6](https://pypi.org/project/PyQt6/) — графический интерфейс на Windows (опционально, `--gui`)
+- [GStreamer](https://gstreamer.freedesktop.org/) — потоковое HLS-воспроизведение в GTK-версии
+- [PyQt6](https://pypi.org/project/PyQt6/) + **QtMultimedia** — графический интерфейс и воспроизведение на Windows (опционально, `--gui`)
 
 ---
 
