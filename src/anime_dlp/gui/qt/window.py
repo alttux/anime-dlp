@@ -41,6 +41,9 @@ class AnimeDlpWindow(QMainWindow):
         if page is not None and self._pages[-1] is not page:
             return
         popped = self._pages.pop()
+        cleanup = getattr(popped, "cleanup", None)
+        if cleanup is not None:
+            cleanup()
         self.nav_stack.setCurrentWidget(self._pages[-1])
         self.nav_stack.removeWidget(popped)
         popped.deleteLater()

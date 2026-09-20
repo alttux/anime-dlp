@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QStackedWidget,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
@@ -30,6 +31,7 @@ POSTER_RADIUS = 12
 
 class _EpisodeRow(QFrame):
     toggled = pyqtSignal(int, bool)
+    play_clicked = pyqtSignal(int)
 
     def __init__(self, number: int, duration: int | None, parent=None):
         super().__init__(parent)
@@ -45,6 +47,15 @@ class _EpisodeRow(QFrame):
             duration_label.setObjectName("dimLabel")
             layout.addWidget(duration_label)
 
+        self.play_button = QPushButton()
+        self.play_button.setObjectName("iconButton")
+        self.play_button.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
+        )
+        self.play_button.setToolTip(f"Смотреть серию {number}")
+        self.play_button.clicked.connect(lambda: self.play_clicked.emit(number))
+        layout.addWidget(self.play_button)
+
     def is_checked(self) -> bool:
         return self.checkbox.isChecked()
 
@@ -53,6 +64,7 @@ class _EpisodeRow(QFrame):
 
     def set_enabled(self, enabled: bool):
         self.checkbox.setEnabled(enabled)
+        self.play_button.setEnabled(enabled)
 
 
 class DetailsPage(QWidget):
@@ -191,6 +203,14 @@ class DetailsPage(QWidget):
         episodes_group = PreferencesGroup(title="Серии")
         if self.is_movie:
             row = ActionRow(title="Фильм", subtitle="Определено как фильм")
+            play_button = QPushButton()
+            play_button.setObjectName("iconButton")
+            play_button.setIcon(
+                play_button.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
+            )
+            play_button.setToolTip("Смотреть фильм")
+            play_button.clicked.connect(lambda: self._on_play_clicked(0))
+            row.add_suffix(play_button)
             episodes_group.add(row)
         else:
             episodes_group.add(self._build_episode_checklist(info))
@@ -313,6 +333,7 @@ class DetailsPage(QWidget):
         for n in range(1, self.series_count + 1):
             row = _EpisodeRow(n, info.duration)
             row.toggled.connect(self._on_episode_toggled)
+            row.play_clicked.connect(self._on_play_clicked)
             self.episode_rows[n] = row
             list_layout.addWidget(row)
 
@@ -337,6 +358,30 @@ class DetailsPage(QWidget):
         if self._syncing_select_all:
             return
         self._sync_select_all_state()
+
+    def _on_play_clicked(self, episode: int):
+        selected = self.translation_combo.current_index()
+        if selected < 0 or not self.translations:
+            self.window.show_toast("Выберите озвучку")
+            return
+        translation = self.translations[selected]
+        series_range = (
+            (0, 0)
+            if self.is_movie
+            else tuple(translation.get("series_range", (1, self.series_count)))
+        )
+
+        from anime_dlp.gui.qt.player_page import PlayerPage
+
+        self.window.push_page(
+            PlayerPage(
+                window=self.window,
+                item=self.item,
+                translation=translation,
+                episode=episode,
+                series_range=series_range,
+            )
+        )
 
     def _sync_select_all_state(self):
         selectable = [r for r in self.episode_rows.values() if r.checkbox.isEnabled()]

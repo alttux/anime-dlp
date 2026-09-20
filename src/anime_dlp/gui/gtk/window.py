@@ -15,7 +15,10 @@ class AnimeDlpWindow(Adw.ApplicationWindow):
         self.set_title(APP_TITLE)
 
         self.nav_view = Adw.NavigationView()
-        self.nav_view.add(HomePage(window=self))
+        home_page = HomePage(window=self)
+        self.nav_view.add(home_page)
+        self._visible_page = home_page
+        self.nav_view.connect("notify::visible-page", self._on_visible_page_changed)
 
         self.toast_overlay = Adw.ToastOverlay()
         self.toast_overlay.set_child(self.nav_view)
@@ -27,6 +30,16 @@ class AnimeDlpWindow(Adw.ApplicationWindow):
 
     def pop_page(self):
         self.nav_view.pop()
+
+    def _on_visible_page_changed(self, nav_view, _pspec):
+        visible_page = nav_view.get_visible_page()
+        previous_page = self._visible_page
+        self._visible_page = visible_page
+        if previous_page is visible_page:
+            return
+        cleanup = getattr(previous_page, "cleanup", None)
+        if cleanup is not None:
+            cleanup()
 
     def show_toast(self, message: str):
         self.toast_overlay.add_toast(Adw.Toast.new(message))

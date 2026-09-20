@@ -18,6 +18,7 @@ class DetailsPage(Adw.NavigationPage):
         self.series_count = None
         self.is_movie = False
         self.episode_checks: dict[int, Gtk.CheckButton] = {}
+        self.episode_play_buttons: dict[int, Gtk.Button] = {}
         self._syncing_select_all = False
         self._syncing_favorite = False
 
@@ -152,6 +153,14 @@ class DetailsPage(Adw.NavigationPage):
         episodes_group = Adw.PreferencesGroup(title="Серии")
         if self.is_movie:
             row = Adw.ActionRow(title="Фильм", subtitle="Определено как фильм")
+            play_button = Gtk.Button(
+                icon_name="media-playback-start-symbolic",
+                tooltip_text="Смотреть фильм",
+                css_classes=["flat", "circular"],
+                valign=Gtk.Align.CENTER,
+            )
+            play_button.connect("clicked", self._on_play_clicked, 0)
+            row.add_suffix(play_button)
             episodes_group.add(row)
         else:
             episodes_group.add(self._build_episode_checklist(info))
@@ -272,6 +281,7 @@ class DetailsPage(Adw.NavigationPage):
         container.append(self.select_all_check)
 
         self.episode_checks = {}
+        self.episode_play_buttons = {}
         listbox = Gtk.ListBox(css_classes=["boxed-list"], selection_mode=Gtk.SelectionMode.NONE)
         for n in range(1, self.series_count + 1):
             check = Gtk.CheckButton()
@@ -283,6 +293,15 @@ class DetailsPage(Adw.NavigationPage):
             row.set_activatable_widget(check)
             if info.duration:
                 row.add_suffix(Gtk.Label(label=f"~{info.duration} мин", css_classes=["dim-label"]))
+            play_button = Gtk.Button(
+                icon_name="media-playback-start-symbolic",
+                tooltip_text=f"Смотреть серию {n}",
+                css_classes=["flat", "circular"],
+                valign=Gtk.Align.CENTER,
+            )
+            play_button.connect("clicked", self._on_play_clicked, n)
+            self.episode_play_buttons[n] = play_button
+            row.add_suffix(play_button)
             listbox.append(row)
 
         scrolled = Gtk.ScrolledWindow(min_content_height=300, hexpand=True, vexpand=False)
@@ -341,9 +360,36 @@ class DetailsPage(Adw.NavigationPage):
         for n, check in self.episode_checks.items():
             in_range = first <= n <= last
             check.set_sensitive(in_range)
+            self.episode_play_buttons[n].set_sensitive(in_range)
             if not in_range and check.get_active():
                 check.set_active(False)
         self._sync_select_all_state()
+
+    def _on_play_clicked(self, _button, episode: int):
+        selected = self.translation_combo.get_selected()
+        if selected == Gtk.INVALID_LIST_POSITION or not self.translations:
+            self.window.show_toast("Выберите озвучку")
+            return
+        translation = self.translations[selected]
+        series_range = (
+            (0, 0)
+            if self.is_movie
+            else tuple(translation.get("series_range", (1, self.series_count)))
+        )
+        try:
+            from anime_dlp.gui.gtk.player_page import PlayerPage
+
+            page = PlayerPage(
+                window=self.window,
+                item=self.item,
+                translation=translation,
+                episode=episode,
+                series_range=series_range,
+            )
+        except (ImportError, RuntimeError, ValueError) as exc:
+            self.window.show_toast(f"Не удалось запустить GStreamer: {exc}")
+            return
+        self.window.push_page(page)
 
     def _on_download_clicked(self, button):
         selected = self.translation_combo.get_selected()

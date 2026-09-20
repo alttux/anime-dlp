@@ -10,6 +10,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from anime_dlp.core.anime_service import get_download_link, search_anime
 from anime_dlp.core.cache import fetch_image_cached
 from anime_dlp.core.downloader import download_episode
+from anime_dlp.core.playback import get_playback_sources
 from anime_dlp.filenames import sanitize_filename
 from anime_dlp.gui import prefetch
 
@@ -108,6 +109,36 @@ class PosterWorker(_BaseWorker):
             data = b""
             error = str(exc)
         self.finished_poster.emit(data, error)
+
+
+class PlaybackWorker(_BaseWorker):
+    finished_sources = pyqtSignal(object, str, int)
+
+    def __init__(
+        self,
+        shikimori_id: str,
+        episode: int,
+        translation_id: str,
+        generation: int,
+    ):
+        super().__init__()
+        self.shikimori_id = shikimori_id
+        self.episode = episode
+        self.translation_id = translation_id
+        self.generation = generation
+
+    def run(self):
+        try:
+            sources = get_playback_sources(
+                self.shikimori_id,
+                self.episode,
+                self.translation_id,
+            )
+            error = ""
+        except Exception as exc:
+            sources = None
+            error = str(exc)
+        self.finished_sources.emit(sources, error, self.generation)
 
 
 class CatalogWorker(_BaseWorker):
