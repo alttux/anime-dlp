@@ -4,7 +4,7 @@ import gi
 
 gi.require_version("Gst", "1.0")
 
-from gi.repository import Adw, GLib, Gst, Gtk
+from gi.repository import Adw, Gio, GLib, Gst, Gtk
 
 from anime_dlp.core.playback import PlaybackSources, get_playback_sources
 
@@ -61,7 +61,6 @@ class PlayerPage(Adw.NavigationPage):
             can_shrink=True,
             content_fit=Gtk.ContentFit.CONTAIN,
         )
-        self.video.set_size_request(480, 270)
         content.append(self.video)
 
         self.status = Gtk.Label(label="Получение ссылки Kodik...", xalign=0)
@@ -208,7 +207,8 @@ class PlayerPage(Adw.NavigationPage):
         self._resume_after_load = autoplay
         self._stop_media()
         self.status.set_label(f"Загрузка {quality}p...")
-        self.media = Gtk.MediaFile.new_for_uri(self.sources.hls_url(quality))
+        media_file = Gio.File.new_for_uri(self.sources.hls_url(quality))
+        self.media = Gtk.MediaFile.new_for_file(media_file)
         self.media.connect("notify::prepared", self._on_media_prepared)
         self.media.connect("notify::playing", self._on_playing_changed)
         self.media.connect("notify::error", self._on_media_error)

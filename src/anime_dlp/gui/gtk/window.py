@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from gi.repository import Adw
+from gi.repository import Adw, GLib
 
 from anime_dlp.gui.formatting import APP_TITLE
 from anime_dlp.gui.gtk.home_page import HomePage
@@ -42,4 +42,7 @@ class AnimeDlpWindow(Adw.ApplicationWindow):
             cleanup()
 
     def show_toast(self, message: str):
-        self.toast_overlay.add_toast(Adw.Toast.new(message))
+        # Adw.Toast titles are parsed as Pango markup. Network errors often
+        # contain URLs with '&', so escape arbitrary exception text first.
+        safe_message = GLib.markup_escape_text(str(message))
+        self.toast_overlay.add_toast(Adw.Toast.new(safe_message))
