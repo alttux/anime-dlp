@@ -134,7 +134,7 @@ pip install .
 дополнительную зависимость `PyGObject`, а также системные пакеты **GTK4**,
 **libadwaita** и **GStreamer** с HLS/кодек-плагинами (в Arch/CachyOS:
 `gtk4`, `libadwaita`, `python-gobject`, `gstreamer`, `gst-plugins-good`,
-`gst-plugins-bad`, `gst-libav`):
+`gst-plugins-bad`, `gst-libav`, `gst-plugin-gtk4`):
 
 ```bash
 pip install -r requirements.txt

@@ -4,7 +4,7 @@ import gi
 
 gi.require_version("Gst", "1.0")
 
-from gi.repository import Adw, Gio, GLib, Gst, Gtk
+from gi.repository import Adw, GLib, Gst, Gtk
 
 from anime_dlp.core.playback import PlaybackSources, get_playback_sources
 
@@ -19,7 +19,7 @@ def _format_time(microseconds: int) -> str:
 
 
 class PlayerPage(Adw.NavigationPage):
-    """Kodik HLS player powered by GTK's GStreamer media backend."""
+    """Kodik HLS player using a GStreamer pipeline rendered in GTK."""
 
     def __init__(
         self,
@@ -39,10 +39,14 @@ class PlayerPage(Adw.NavigationPage):
         self.episode = episode
         self.series_range = series_range
         self.sources: PlaybackSources | None = None
-        self.media: Gtk.MediaFile | None = None
+        self.player: Gst.Element | None = None
+        self.video_sink: Gst.Element | None = None
+        self.bus: Gst.Bus | None = None
+        self._bus_handler_id: int | None = None
         self._load_generation = 0
         self._pending_seek = 0
         self._resume_after_load = True
+        self._awaiting_preroll = False
         self._quality_sync = False
         self._fullscreen = False
         self._disposed = False
@@ -140,7 +144,7 @@ class PlayerPage(Adw.NavigationPage):
         self.episode = episode
         self._resume_after_load = autoplay
         self._pending_seek = 0
-        self._stop_media()
+        self._stop_player()
         self.play_button.set_sensitive(False)
         self.seek_scale.set_sensitive(False)
         self.status.set_label("Получение ссылки Kodik...")
@@ -197,74 +201,137 @@ class PlayerPage(Adw.NavigationPage):
         self.quality_dropdown.set_selected(sources.qualities.index(selected_quality))
         self._quality_sync = False
         self.quality_dropdown.set_sensitive(True)
-        self._set_media_source(selected_quality, 0, self._resume_after_load)
+        try:
+            self._set_player_source(selected_quality, 0, self._resume_after_load)
+        except RuntimeError as exc:
+            self.status.set_label(f"Не удалось запустить плеер: {exc}")
+            self.window.show_toast(f"Ошибка плеера: {exc}")
+            self.quality_dropdown.set_sensitive(False)
         return GLib.SOURCE_REMOVE
 
-    def _set_media_source(self, quality: int, position: int, autoplay: bool):
+    def _set_player_source(self, quality: int, position: int, autoplay: bool):
         if self.sources is None:
             return
         self._pending_seek = position
         self._resume_after_load = autoplay
-        self._stop_media()
+        self._awaiting_preroll = True
+        self._stop_player()
         self.status.set_label(f"Загрузка {quality}p...")
-        media_file = Gio.File.new_for_uri(self.sources.hls_url(quality))
-        self.media = Gtk.MediaFile.new_for_file(media_file)
-        self.media.connect("notify::prepared", self._on_media_prepared)
-        self.media.connect("notify::playing", self._on_playing_changed)
-        self.media.connect("notify::error", self._on_media_error)
-        self.media.connect("notify::ended", self._on_media_ended)
-        self.video.set_paintable(self.media)
+        self.player = Gst.ElementFactory.make("playbin3", None)
+        if self.player is None:
+            self.player = Gst.ElementFactory.make("playbin", None)
+        self.video_sink = Gst.ElementFactory.make("gtk4paintablesink", None)
+        if self.player is None or self.video_sink is None:
+            self._stop_player()
+            raise RuntimeError(
+                "Не найдены компоненты GStreamer для HLS/GTK4. "
+                "Установите hlsdemux и gtk4paintablesink."
+            )
 
-    def _on_media_prepared(self, media, _pspec):
-        if not media.is_prepared():
+        self.player.set_property("uri", self.sources.hls_url(quality))
+        self.player.set_property("video-sink", self.video_sink)
+        self.video.set_paintable(self.video_sink.get_property("paintable"))
+        self.bus = self.player.get_bus()
+        self.bus.add_signal_watch()
+        self._bus_handler_id = self.bus.connect("message", self._on_bus_message)
+        self.player.set_state(Gst.State.PAUSED)
+
+    def _on_bus_message(self, _bus: Gst.Bus, message: Gst.Message):
+        if self._disposed or self.player is None:
             return
-        duration = max(0, media.get_duration())
-        self.seek_scale.set_range(0, max(1, duration // 1_000_000))
-        self.seek_scale.set_sensitive(duration > 0 and media.is_seekable())
+        message_type = message.type
+        if message_type == Gst.MessageType.ERROR:
+            error, debug = message.parse_error()
+            detail = error.message
+            if debug:
+                detail = f"{detail} ({debug})"
+            self.status.set_label(f"Ошибка воспроизведения: {detail}")
+            self.window.show_toast(f"Ошибка плеера: {error.message}")
+            self.play_button.set_sensitive(False)
+        elif message_type == Gst.MessageType.EOS:
+            if self.episode < self.series_range[1]:
+                self._load_episode(self.episode + 1, autoplay=True)
+        elif message_type == Gst.MessageType.ASYNC_DONE:
+            if self._awaiting_preroll:
+                self._awaiting_preroll = False
+                self._on_player_prepared()
+        elif message_type == Gst.MessageType.BUFFERING:
+            percent = message.parse_buffering()
+            self.status.set_label(f"Буферизация: {percent}%")
+            if percent < 100:
+                self.player.set_state(Gst.State.PAUSED)
+            elif self._resume_after_load:
+                self.player.set_state(Gst.State.PLAYING)
+
+    def _on_player_prepared(self):
+        if self.player is None:
+            return
+        duration = self._query_duration()
+        self.seek_scale.set_range(0, max(1, duration // Gst.SECOND))
+        self.seek_scale.set_sensitive(duration > 0 and self._is_seekable())
         self.duration_label.set_label(_format_time(duration))
         self.play_button.set_sensitive(True)
         self.status.set_label("")
         if self._pending_seek:
-            media.seek(min(self._pending_seek, duration))
+            self._seek_to(min(self._pending_seek, duration))
         if self._resume_after_load:
-            media.play()
+            self.player.set_state(Gst.State.PLAYING)
 
-    def _on_playing_changed(self, media, _pspec):
-        playing = media.get_playing()
-        self.play_button.set_icon_name(
-            "media-playback-pause-symbolic" if playing else "media-playback-start-symbolic"
-        )
-        self.play_button.set_tooltip_text("Пауза" if playing else "Воспроизвести")
+    def _query_duration(self) -> int:
+        if self.player is None:
+            return 0
+        success, duration = self.player.query_duration(Gst.Format.TIME)
+        return max(0, duration) if success else 0
 
-    def _on_media_error(self, media, _pspec):
-        error = media.get_error()
-        if error is not None:
-            self.status.set_label(f"Ошибка воспроизведения: {error.message}")
+    def _is_seekable(self) -> bool:
+        if self.player is None:
+            return False
+        success, seekable, _start, _end = self.player.query_seeking(Gst.Format.TIME)
+        return success and seekable
 
-    def _on_media_ended(self, media, _pspec):
-        if media.get_ended() and self.episode < self.series_range[1]:
-            self._load_episode(self.episode + 1, autoplay=True)
+    def _is_playing(self) -> bool:
+        if self.player is None:
+            return False
+        _result, current, _pending = self.player.get_state(0)
+        return current == Gst.State.PLAYING
+
+    def _seek_to(self, position: int):
+        if self.player is not None and self._is_seekable():
+            self.player.seek_simple(
+                Gst.Format.TIME,
+                Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT,
+                max(0, position),
+            )
 
     def _update_position(self):
         if self._disposed:
             return GLib.SOURCE_REMOVE
-        if self.media is not None and self.media.is_prepared():
-            timestamp = max(0, self.media.get_timestamp())
+        if self.player is not None:
+            success, timestamp = self.player.query_position(Gst.Format.TIME)
+            if not success:
+                return GLib.SOURCE_CONTINUE
+            timestamp = max(0, timestamp)
             self.elapsed_label.set_label(_format_time(timestamp))
-            self.seek_scale.set_value(timestamp // 1_000_000)
+            self.seek_scale.set_value(timestamp // Gst.SECOND)
+            playing = self._is_playing()
+            self.play_button.set_icon_name(
+                "media-playback-pause-symbolic" if playing else "media-playback-start-symbolic"
+            )
+            self.play_button.set_tooltip_text("Пауза" if playing else "Воспроизвести")
         return GLib.SOURCE_CONTINUE
 
     def _on_seek_changed(self, _scale, _scroll_type, value: float):
-        if self.media is not None and self.media.is_seekable():
-            self.media.seek(int(value * 1_000_000))
+        self._seek_to(int(value * Gst.SECOND))
         return False
 
     def _seek_relative(self, seconds: int):
-        if self.media is None or not self.media.is_seekable():
+        if self.player is None or not self._is_seekable():
             return
-        target = self.media.get_timestamp() + seconds * 1_000_000
-        duration = max(0, self.media.get_duration())
-        self.media.seek(max(0, min(target, duration)))
+        success, timestamp = self.player.query_position(Gst.Format.TIME)
+        if not success:
+            return
+        target = timestamp + seconds * Gst.SECOND
+        self._seek_to(min(max(0, target), self._query_duration()))
 
     def _on_rewind(self, _button):
         self._seek_relative(-5)
@@ -273,12 +340,14 @@ class PlayerPage(Adw.NavigationPage):
         self._seek_relative(5)
 
     def _on_play_pause(self, _button):
-        if self.media is None:
+        if self.player is None:
             return
-        if self.media.get_playing():
-            self.media.pause()
+        if self._is_playing():
+            self._resume_after_load = False
+            self.player.set_state(Gst.State.PAUSED)
         else:
-            self.media.play()
+            self._resume_after_load = True
+            self.player.set_state(Gst.State.PLAYING)
 
     def _selected_quality(self) -> int | None:
         if self.sources is None:
@@ -289,15 +358,16 @@ class PlayerPage(Adw.NavigationPage):
         return self.sources.qualities[selected]
 
     def _on_quality_changed(self, _dropdown, _pspec):
-        if self._quality_sync or self.media is None:
+        if self._quality_sync or self.player is None:
             return
         quality = self._selected_quality()
         if quality is None:
             return
-        self._set_media_source(
+        success, position = self.player.query_position(Gst.Format.TIME)
+        self._set_player_source(
             quality,
-            self.media.get_timestamp(),
-            self.media.get_playing(),
+            position if success else 0,
+            self._is_playing(),
         )
 
     def _sync_episode_buttons(self):
@@ -324,16 +394,24 @@ class PlayerPage(Adw.NavigationPage):
             self.fullscreen_button.set_icon_name("view-fullscreen-symbolic")
             self.fullscreen_button.set_tooltip_text("Полноэкранный режим")
 
-    def _stop_media(self):
-        if self.media is not None:
-            self.media.pause()
-            self.video.set_paintable(None)
-            self.media = None
+    def _stop_player(self):
+        if self.bus is not None:
+            if self._bus_handler_id is not None:
+                self.bus.disconnect(self._bus_handler_id)
+            self.bus.remove_signal_watch()
+        if self.player is not None:
+            self.player.set_state(Gst.State.NULL)
+        self.video.set_paintable(None)
+        self.player = None
+        self.video_sink = None
+        self.bus = None
+        self._bus_handler_id = None
+        self._awaiting_preroll = False
 
     def cleanup(self):
         self._disposed = True
         self._load_generation += 1
-        self._stop_media()
+        self._stop_player()
         if self._fullscreen:
             self.window.unfullscreen()
             self._fullscreen = False
