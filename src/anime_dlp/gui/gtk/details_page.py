@@ -6,6 +6,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 from anime_dlp.core import favorites
 from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
 from anime_dlp.core.cache import fetch_image_cached
+from anime_dlp.core.playback import get_playback_sources, open_in_vlc
 from anime_dlp.gui import prefetch
 
 
@@ -155,7 +156,7 @@ class DetailsPage(Adw.NavigationPage):
             row = Adw.ActionRow(title="Фильм", subtitle="Определено как фильм")
             play_button = Gtk.Button(
                 icon_name="media-playback-start-symbolic",
-                tooltip_text="Смотреть фильм",
+                tooltip_text="Открыть фильм в VLC",
                 css_classes=["flat", "circular"],
                 valign=Gtk.Align.CENTER,
             )
@@ -295,7 +296,7 @@ class DetailsPage(Adw.NavigationPage):
                 row.add_suffix(Gtk.Label(label=f"~{info.duration} мин", css_classes=["dim-label"]))
             play_button = Gtk.Button(
                 icon_name="media-playback-start-symbolic",
-                tooltip_text=f"Смотреть серию {n}",
+                tooltip_text=f"Открыть серию {n} в VLC",
                 css_classes=["flat", "circular"],
                 valign=Gtk.Align.CENTER,
             )
@@ -371,25 +372,28 @@ class DetailsPage(Adw.NavigationPage):
             self.window.show_toast("Выберите озвучку")
             return
         translation = self.translations[selected]
-        series_range = (
-            (0, 0)
-            if self.is_movie
-            else tuple(translation.get("series_range", (1, self.series_count)))
-        )
-        try:
-            from anime_dlp.gui.gtk.player_page import PlayerPage
+        self.window.show_toast("Открытие видео в VLC...")
+        threading.Thread(
+            target=self._open_in_vlc_worker,
+            args=(episode, str(translation["id"])),
+            daemon=True,
+        ).start()
 
-            page = PlayerPage(
-                window=self.window,
-                item=self.item,
-                translation=translation,
-                episode=episode,
-                series_range=series_range,
+    def _open_in_vlc_worker(self, episode: int, translation_id: str):
+        try:
+            sources = get_playback_sources(
+                str(self.item["shikimori_id"]), episode, translation_id
             )
-        except (ImportError, RuntimeError, ValueError) as exc:
-            self.window.show_toast(f"Не удалось запустить GStreamer: {exc}")
-            return
-        self.window.push_page(page)
+            open_in_vlc(sources.hls_url(sources.default_quality))
+            error = None
+        except Exception as exc:
+            error = str(exc)
+        GLib.idle_add(self._on_vlc_opened, error)
+
+    def _on_vlc_opened(self, error: str | None):
+        if error:
+            self.window.show_toast(f"Не удалось открыть VLC: {error}")
+        return GLib.SOURCE_REMOVE
 
     def _on_download_clicked(self, button):
         selected = self.translation_combo.get_selected()

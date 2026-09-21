@@ -6,6 +6,7 @@ from anime_dlp.core.playback import (
     _available_qualities,
     _normalise_base_url,
     get_playback_sources,
+    open_in_vlc,
 )
 
 
@@ -64,6 +65,32 @@ class PlaybackSourcesTests(unittest.TestCase):
         self.assertEqual(sources.translation_id, "610")
         self.assertEqual(sources.qualities, (360, 480, 720))
         self.assertEqual(sources.skip_segments, ((0, 90), (1200, 1300)))
+
+    @patch("anime_dlp.core.playback.subprocess.Popen")
+    @patch("anime_dlp.core.playback.sys.platform", "darwin")
+    def test_open_in_vlc_uses_macos_application_launcher(self, popen):
+        open_in_vlc("https://cdn.example/manifest.m3u8")
+
+        popen.assert_called_once_with(
+            ["open", "-a", "VLC", "https://cdn.example/manifest.m3u8"],
+            start_new_session=True,
+        )
+
+    @patch("anime_dlp.core.playback.shutil.which", return_value="/usr/bin/vlc")
+    @patch("anime_dlp.core.playback.subprocess.Popen")
+    @patch("anime_dlp.core.playback.sys.platform", "linux")
+    def test_open_in_vlc_uses_vlc_binary_on_linux(self, popen, _which):
+        open_in_vlc("https://cdn.example/manifest.m3u8")
+
+        popen.assert_called_once_with(
+            ["vlc", "https://cdn.example/manifest.m3u8"], start_new_session=True
+        )
+
+    @patch("anime_dlp.core.playback.shutil.which", return_value=None)
+    @patch("anime_dlp.core.playback.sys.platform", "linux")
+    def test_open_in_vlc_reports_missing_binary(self, _which):
+        with self.assertRaisesRegex(RuntimeError, "VLC не найден"):
+            open_in_vlc("https://cdn.example/manifest.m3u8")
 
 
 if __name__ == "__main__":

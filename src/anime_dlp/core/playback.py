@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+import shutil
+import subprocess
+import sys
 from urllib.parse import urlsplit
 
 from anime_dlp.core.anime_service import get_download_link
@@ -74,3 +77,18 @@ def get_playback_sources(
         qualities=_available_qualities(int(max_quality)),
         skip_segments=tuple(tuple(segment) for segment in skip_segments),
     )
+
+
+def open_in_vlc(hls_url: str) -> None:
+    """Start VLC with a direct HLS manifest URL without waiting for playback."""
+    if sys.platform == "darwin":
+        command = ["open", "-a", "VLC", hls_url]
+    else:
+        executable = "vlc.exe" if sys.platform == "win32" else "vlc"
+        if shutil.which(executable) is None:
+            raise RuntimeError("VLC не найден. Установите VLC и повторите попытку.")
+        command = [executable, hls_url]
+    try:
+        subprocess.Popen(command, start_new_session=True)
+    except OSError as exc:
+        raise RuntimeError(f"Не удалось запустить VLC: {exc}") from exc

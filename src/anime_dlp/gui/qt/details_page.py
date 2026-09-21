@@ -20,9 +20,10 @@ from PyQt6.QtWidgets import (
 
 from anime_dlp.core import favorites
 from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
+from anime_dlp.core.playback import open_in_vlc
 from anime_dlp.gui.qt.pixmap_utils import round_pixmap
 from anime_dlp.gui.qt.widgets import ActionRow, ComboRow, FlowLayout, NavHeaderBar, PreferencesGroup
-from anime_dlp.gui.qt.workers import AnimeInfoWorker, PosterWorker
+from anime_dlp.gui.qt.workers import AnimeInfoWorker, PlaybackWorker, PosterWorker
 
 POSTER_WIDTH = 200
 POSTER_HEIGHT = 280
@@ -52,7 +53,7 @@ class _EpisodeRow(QFrame):
         self.play_button.setIcon(
             self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
         )
-        self.play_button.setToolTip(f"Смотреть серию {number}")
+        self.play_button.setToolTip(f"Открыть серию {number} в VLC")
         self.play_button.clicked.connect(lambda: self.play_clicked.emit(number))
         layout.addWidget(self.play_button)
 
@@ -208,7 +209,7 @@ class DetailsPage(QWidget):
             play_button.setIcon(
                 play_button.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
             )
-            play_button.setToolTip("Смотреть фильм")
+            play_button.setToolTip("Открыть фильм в VLC")
             play_button.clicked.connect(lambda: self._on_play_clicked(0))
             row.add_suffix(play_button)
             episodes_group.add(row)
@@ -365,23 +366,21 @@ class DetailsPage(QWidget):
             self.window.show_toast("Выберите озвучку")
             return
         translation = self.translations[selected]
-        series_range = (
-            (0, 0)
-            if self.is_movie
-            else tuple(translation.get("series_range", (1, self.series_count)))
+        self.window.show_toast("Открытие видео в VLC...")
+        worker = PlaybackWorker(
+            str(self.item["shikimori_id"]), episode, str(translation["id"]), 0
         )
+        worker.finished_sources.connect(self._on_vlc_sources_loaded)
+        worker.start()
 
-        from anime_dlp.gui.qt.player_page import PlayerPage
-
-        self.window.push_page(
-            PlayerPage(
-                window=self.window,
-                item=self.item,
-                translation=translation,
-                episode=episode,
-                series_range=series_range,
-            )
-        )
+    def _on_vlc_sources_loaded(self, sources, error: str, _generation: int):
+        if error or sources is None:
+            self.window.show_toast(f"Не удалось получить ссылку Kodik: {error}")
+            return
+        try:
+            open_in_vlc(sources.hls_url(sources.default_quality))
+        except RuntimeError as exc:
+            self.window.show_toast(str(exc))
 
     def _sync_select_all_state(self):
         selectable = [r for r in self.episode_rows.values() if r.checkbox.isEnabled()]
