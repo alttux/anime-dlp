@@ -2,15 +2,15 @@
 отдельный поток и сообщающие о результате через сигналы (аналог связки
 threading.Thread + GLib.idle_add в GTK-версии)."""
 
+import threading
 from pathlib import Path
 
 import requests
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from anime_dlp.core.anime_service import get_download_link, search_anime
+from anime_dlp.core.anime_service import search_anime
 from anime_dlp.core.cache import fetch_image_cached
-from anime_dlp.core.downloader import download_episode
-from anime_dlp.filenames import sanitize_filename
+from anime_dlp.core.episodes import BatchResult, DownloadEvents, EpisodeJob, download_episodes
 from anime_dlp.gui import prefetch
 
 # Живые воркеры, ещё не завершившие run(). Смысл — держать ссылку на
@@ -50,6 +50,8 @@ def stop_all_workers(wait_ms: int = 3000) -> None:
     for worker in list(_active_workers):
         try:
             worker.requestInterruption()
+            if isinstance(worker, DownloadWorker):
+                worker.cancel()
             if not worker.wait(wait_ms):
                 worker.terminate()
                 worker.wait()
@@ -132,12 +134,17 @@ class CatalogWorker(_BaseWorker):
         self.finished_page.emit(items, next_cursor or "", error, self.generation)
 
 
-class DownloadWorker(_BaseWorker):
+class DownloadWorker(_BaseWorker, DownloadEvents):
+    """Обёртка над core.episodes.download_episodes: колбэки ядра становятся
+    сигналами (Qt сам доставит их в главный поток очередью)."""
+
     file_started = pyqtSignal(str, str, int, int)
-    file_progress = pyqtSignal(str, int, int)
+    # qlonglong: в C++ int 32-битный, а фильм в 1080p легко больше 2 ГБ.
+    file_progress = pyqtSignal(str, "qlonglong", "qlonglong")
     file_done = pyqtSignal(str, str)
     file_error = pyqtSignal(str, str)
-    all_done = pyqtSignal()
+    # BatchResult — обычный Python-объект, поэтому тип сигнала object.
+    all_done = pyqtSignal(object)
     fatal_error = pyqtSignal(str)
 
     def __init__(
@@ -152,33 +159,35 @@ class DownloadWorker(_BaseWorker):
         self.translation_id = translation_id
         self.eps_to_download = eps_to_download
         self.download_dir = download_dir
+        self._cancel_event = threading.Event()
+
+    def cancel(self):
+        """Просит остановить скачивание; безопасно звать из главного потока."""
+        self._cancel_event.set()
+
+    def on_start(self, job: EpisodeJob, quality: int) -> None:
+        self.file_started.emit(job.filename, str(job.filepath), job.index, job.total)
+
+    def on_progress(self, job: EpisodeJob, downloaded: int, total: int) -> None:
+        self.file_progress.emit(job.filename, downloaded, total)
+
+    def on_done(self, job: EpisodeJob) -> None:
+        self.file_done.emit(job.filename, str(job.filepath))
+
+    def on_error(self, job: EpisodeJob, message: str) -> None:
+        self.file_error.emit(job.filename, message)
 
     def run(self):
         try:
-            sid = self.item["shikimori_id"]
-            total = len(self.eps_to_download)
-            started: set[str] = set()
-            for index, ep in enumerate(self.eps_to_download, 1):
-                if self.isInterruptionRequested():
-                    break
-                safe_title = sanitize_filename(self.item["title"])
-                filename = f"{safe_title}.mp4" if ep == 0 else f"{ep}.mp4"
-                filepath = self.download_dir / filename
-                try:
-                    link, quality, _ = get_download_link(sid, ep, self.translation_id)
-
-                    self.file_started.emit(filename, str(filepath), index, total)
-                    started.add(filename)
-
-                    def on_progress(downloaded, total_bytes, filename=filename):
-                        self.file_progress.emit(filename, downloaded, total_bytes)
-
-                    download_episode(link, filepath, quality, on_progress=on_progress)
-                    self.file_done.emit(filename, str(filepath))
-                except Exception as exc:
-                    if filename not in started:
-                        self.file_started.emit(filename, str(filepath), index, total)
-                    self.file_error.emit(filename, str(exc))
-            self.all_done.emit()
+            result = download_episodes(
+                self.item,
+                self.translation_id,
+                self.eps_to_download,
+                self.download_dir,
+                self,
+                self._cancel_event,
+            )
         except Exception as exc:
             self.fatal_error.emit(str(exc))
+            result = BatchResult(done=[], failed=[], cancelled=False)
+        self.all_done.emit(result)

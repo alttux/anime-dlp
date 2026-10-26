@@ -99,7 +99,7 @@ QTabBar::tab:selected {
 QTabBar::tab:!selected:hover {
     background: palette(midlight);
 }
-QFrame#coverCard:hover {
+QFrame#coverCard:hover, QFrame#coverCard:focus {
     background: palette(alternate-base);
     border-radius: 8px;
 }
@@ -250,6 +250,12 @@ class StatusPage(QWidget):
         self._layout.addWidget(self.description_label)
 
         self._child: QWidget | None = None
+
+    def set_icon_text(self, text: str):
+        self.icon_label.setText(text)
+
+    def set_title(self, text: str):
+        self.title_label.setText(text)
 
     def set_description(self, text: str):
         self.description_label.setText(text)

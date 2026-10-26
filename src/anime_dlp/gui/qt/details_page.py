@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 
 from anime_dlp.core import favorites
 from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
-from anime_dlp.gui.qt.pixmap_utils import round_pixmap
+from anime_dlp.gui.qt.pixmap_utils import cover_pixmap, round_pixmap
 from anime_dlp.gui.qt.widgets import ActionRow, ComboRow, FlowLayout, NavHeaderBar, PreferencesGroup
 from anime_dlp.gui.qt.workers import AnimeInfoWorker, PosterWorker
 
@@ -137,13 +137,9 @@ class DetailsPage(QWidget):
         pixmap = QPixmap()
         if not pixmap.loadFromData(data):
             return
-        pixmap = pixmap.scaled(
-            POSTER_WIDTH,
-            POSTER_HEIGHT,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
+        pixmap = round_pixmap(
+            cover_pixmap(pixmap, POSTER_WIDTH, POSTER_HEIGHT), radius=POSTER_RADIUS
         )
-        pixmap = round_pixmap(pixmap, radius=POSTER_RADIUS)
         self.poster_label.setPixmap(pixmap)
         # Постер может загрузиться раньше информации об аниме — до
         # _build_form() poster_label ещё ни к чему не прикреплён (без
@@ -300,9 +296,12 @@ class DetailsPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
+        # «Частично» выставляется только программно: у tristate-флажка Qt
+        # клик пользователя идёт по кругу Unchecked → Partially → Checked, и
+        # первый клик ничего не выбирал. Поэтому слушаем clicked, а не
+        # stateChanged, и сами решаем, выбрать всё или снять.
         self.select_all_check = QCheckBox("Выбрать все")
-        self.select_all_check.setTristate(True)
-        self.select_all_check.stateChanged.connect(self._on_select_all_toggled)
+        self.select_all_check.clicked.connect(self._on_select_all_clicked)
         layout.addWidget(self.select_all_check)
 
         self.episode_rows = {}
@@ -323,15 +322,15 @@ class DetailsPage(QWidget):
         layout.addWidget(scroll)
         return container
 
-    def _on_select_all_toggled(self, state: int):
-        if self._syncing_select_all:
-            return
+    def _on_select_all_clicked(self):
+        selectable = [r for r in self.episode_rows.values() if r.checkbox.isEnabled()]
+        # Как в GTK: из «ничего» и «частично» — выбрать все, из «все» — снять.
+        checked = not all(r.is_checked() for r in selectable)
         self._syncing_select_all = True
-        checked = Qt.CheckState(state) == Qt.CheckState.Checked
-        for row in self.episode_rows.values():
-            if row.checkbox.isEnabled():
-                row.set_checked(checked)
+        for row in selectable:
+            row.set_checked(checked)
         self._syncing_select_all = False
+        self._sync_select_all_state()
 
     def _on_episode_toggled(self, _number: int, _checked: bool):
         if self._syncing_select_all:
@@ -384,8 +383,9 @@ class DetailsPage(QWidget):
                 self.window.show_toast("Выберите хотя бы одну серию")
                 return
 
+        # Стартуем с папки из -d (или папки загрузок по умолчанию).
         folder = QFileDialog.getExistingDirectory(
-            self.window, "Выберите папку для скачивания"
+            self.window, "Выберите папку для скачивания", str(self.window.download_dir)
         )
         if not folder:
             return

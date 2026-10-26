@@ -1,7 +1,8 @@
 import threading
+from pathlib import Path
 
 import requests
-from gi.repository import Adw, Gdk, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from anime_dlp.core import favorites
 from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
@@ -293,12 +294,18 @@ class DetailsPage(Adw.NavigationPage):
     def _on_select_all_toggled(self, button):
         if self._syncing_select_all:
             return
+        selectable = [c for c in self.episode_checks.values() if c.get_sensitive()]
+        # Не полагаемся на get_active(): в состоянии inconsistent оно может
+        # быть любым. Правило то же, что в Qt: из «ничего» и «частично» —
+        # выбрать все, из «все» — снять.
+        active = not all(c.get_active() for c in selectable)
         self._syncing_select_all = True
-        active = button.get_active()
-        for check in self.episode_checks.values():
-            if check.get_sensitive():
-                check.set_active(active)
+        for check in selectable:
+            check.set_active(active)
         self._syncing_select_all = False
+        # Клик по «частично выбранному» флажку оставлял его в состоянии
+        # inconsistent, хотя теперь выбраны все серии (или ни одной).
+        self._sync_select_all_state()
 
     def _on_episode_check_toggled(self, button):
         if self._syncing_select_all:
@@ -363,6 +370,8 @@ class DetailsPage(Adw.NavigationPage):
                 return
 
         dialog = Gtk.FileDialog(title="Выберите папку для скачивания")
+        # Стартуем с папки из -d (или папки загрузок по умолчанию).
+        dialog.set_initial_folder(Gio.File.new_for_path(str(self.window.download_dir)))
         dialog.select_folder(self.window, None, self._on_folder_chosen, (translation, eps_to_download))
 
     def _on_folder_chosen(self, dialog, result, user_data):
@@ -373,8 +382,6 @@ class DetailsPage(Adw.NavigationPage):
             return
         if gfile is None:
             return
-
-        from pathlib import Path
 
         download_dir = Path(gfile.get_path())
 

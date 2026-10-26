@@ -23,3 +23,20 @@ def round_pixmap(pixmap: QPixmap, radius: int = 8) -> QPixmap:
     painter.end()
 
     return rounded
+
+
+def cover_pixmap(pixmap: QPixmap, width: int, height: int) -> QPixmap:
+    """Масштабирует с заполнением и обрезает по центру до width×height —
+    как Gtk.ContentFit.COVER в GTK-версии (без полос по краям у постеров
+    с «нестандартными» пропорциями)."""
+    if pixmap.isNull():
+        return pixmap
+    scaled = pixmap.scaled(
+        width,
+        height,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    x = (scaled.width() - width) // 2
+    y = (scaled.height() - height) // 2
+    return scaled.copy(x, y, width, height)

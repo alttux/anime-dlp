@@ -16,9 +16,8 @@ import shutil
 import time
 from pathlib import Path
 
-import requests
-
 from anime_dlp.config import CACHE_DIR
+from anime_dlp.core.http import get_session
 
 IMAGE_TTL_SECONDS = 7 * 24 * 3600
 META_TTL_SECONDS = 24 * 3600
@@ -87,7 +86,10 @@ def fetch_image_cached(url: str, timeout: float = 10) -> bytes:
     cached = get_cached_image(url)
     if cached is not None:
         return cached
-    response = requests.get(url, timeout=timeout)
+    # Общая keep-alive сессия: сетка каталога грузит десятки обложек с одного
+    # хоста подряд. Referer Kodik (заголовок сессии по умолчанию) постерам
+    # Shikimori ни к чему — None убирает его из запроса.
+    response = get_session().get(url, timeout=timeout, headers={"Referer": None})
     response.raise_for_status()
     data = response.content
     store_image(url, data)
