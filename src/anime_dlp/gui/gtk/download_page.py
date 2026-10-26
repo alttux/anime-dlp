@@ -3,10 +3,9 @@ from pathlib import Path
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from anime_dlp.core.anime_service import get_download_link
-from anime_dlp.core.downloader import download_episode
-from anime_dlp.filenames import sanitize_filename
-from anime_dlp.gui.formatting import SpeedTracker, humanize_bytes
+from anime_dlp.core.episodes import BatchResult, DownloadEvents, EpisodeJob, download_episodes
+from anime_dlp.gui.desktop import reveal_in_file_manager
+from anime_dlp.gui.formatting import SpeedTracker, humanize_bytes, summarize_result
 
 
 def _launch_file(window, path: Path):
@@ -22,6 +21,9 @@ def _launch_file(window, path: Path):
 
 
 def _show_in_folder(window, path: Path):
+    # Windows (MSYS2) и macOS: штатная команда ОС «выделить файл в папке».
+    if reveal_in_file_manager(path):
+        return
     # Gtk.FileLauncher.open_containing_folder() goes through the
     # xdg-desktop-portal OpenDirectory call, which on some desktops/portal
     # backends silently activates the file manager without ever showing a
@@ -117,6 +119,26 @@ class _FileRow:
 
     def set_error(self, message: str):
         self.status_label.set_label(f"Ошибка: {message}")
+        self.status_label.set_tooltip_text(message)
+
+
+class _GLibEvents(DownloadEvents):
+    """Перекидывает колбэки core.episodes из фонового потока в главный цикл."""
+
+    def __init__(self, page: "DownloadPage"):
+        self.page = page
+
+    def on_start(self, job: EpisodeJob, quality: int) -> None:
+        GLib.idle_add(self.page._on_file_start, job)
+
+    def on_progress(self, job: EpisodeJob, downloaded: int, total: int) -> None:
+        GLib.idle_add(self.page._on_file_progress, job.filename, downloaded, total)
+
+    def on_done(self, job: EpisodeJob) -> None:
+        GLib.idle_add(self.page._on_file_done, job)
+
+    def on_error(self, job: EpisodeJob, message: str) -> None:
+        GLib.idle_add(self.page._on_file_error, job.filename, message)
 
 
 class DownloadPage(Adw.NavigationPage):
@@ -136,9 +158,14 @@ class DownloadPage(Adw.NavigationPage):
         self.download_dir = download_dir
         self._rows: dict[str, _FileRow] = {}
         self._downloaded_paths: list[Path] = []
+        self._cancel_event = threading.Event()
 
         toolbar_view = Adw.ToolbarView()
-        toolbar_view.add_top_bar(Adw.HeaderBar())
+        header = Adw.HeaderBar()
+        self.cancel_button = Gtk.Button(label="Отменить", css_classes=["destructive-action"])
+        self.cancel_button.connect("clicked", self._on_cancel_clicked)
+        header.pack_end(self.cancel_button)
+        toolbar_view.add_top_bar(header)
 
         self.stack = Gtk.Stack()
 
@@ -176,35 +203,30 @@ class DownloadPage(Adw.NavigationPage):
 
     def _download_worker(self):
         try:
-            sid = self.item["shikimori_id"]
-            total = len(self.eps_to_download)
-            for index, ep in enumerate(self.eps_to_download, 1):
-                safe_title = sanitize_filename(self.item["title"])
-                filename = f"{safe_title}.mp4" if ep == 0 else f"{ep}.mp4"
-                try:
-                    link, quality, _ = get_download_link(sid, ep, self.translation_id)
-                    filepath = self.download_dir / filename
-
-                    GLib.idle_add(self._on_file_start, filename, filepath, index, total)
-
-                    def on_progress(downloaded, total_bytes, filename=filename):
-                        GLib.idle_add(self._on_file_progress, filename, downloaded, total_bytes)
-
-                    download_episode(link, filepath, quality, on_progress=on_progress)
-                    GLib.idle_add(self._on_file_done, filename, filepath)
-                except Exception as exc:
-                    if filename not in self._rows:
-                        filepath = self.download_dir / filename
-                        GLib.idle_add(self._on_file_start, filename, filepath, index, total)
-                    GLib.idle_add(self._on_file_error, filename, str(exc))
-            GLib.idle_add(self._on_all_done)
+            result = download_episodes(
+                self.item,
+                self.translation_id,
+                self.eps_to_download,
+                self.download_dir,
+                _GLibEvents(self),
+                self._cancel_event,
+            )
         except Exception as exc:
             GLib.idle_add(self.window.show_toast, f"Ошибка: {exc}")
+            result = BatchResult(done=[], failed=[], cancelled=False)
+        GLib.idle_add(self._on_all_done, result)
 
-    def _on_file_start(self, filename: str, filepath: Path, index: int, total: int):
-        self.summary_label.set_label(f"Скачивание {index} из {total}: {filename}")
-        file_row = _FileRow(filename, filepath, self.window)
-        self._rows[filename] = file_row
+    def _on_cancel_clicked(self, _button):
+        # Остановка не мгновенная (поток дописывает текущий блок) — экран
+        # «Отменено» покажет _on_all_done, когда поток действительно встанет.
+        self._cancel_event.set()
+        self.cancel_button.set_sensitive(False)
+        self.summary_label.set_label("Отмена...")
+
+    def _on_file_start(self, job: EpisodeJob):
+        self.summary_label.set_label(f"Скачивание {job.index} из {job.total}: {job.filename}")
+        file_row = _FileRow(job.filename, job.filepath, self.window)
+        self._rows[job.filename] = file_row
         self.files_group.add(file_row.row)
         return GLib.SOURCE_REMOVE
 
@@ -214,11 +236,11 @@ class DownloadPage(Adw.NavigationPage):
             row.set_progress(downloaded, total)
         return GLib.SOURCE_REMOVE
 
-    def _on_file_done(self, filename: str, filepath: Path):
-        row = self._rows.get(filename)
+    def _on_file_done(self, job: EpisodeJob):
+        row = self._rows.get(job.filename)
         if row:
             row.set_done()
-        self._downloaded_paths.append(filepath)
+        self._downloaded_paths.append(job.filepath)
         return GLib.SOURCE_REMOVE
 
     def _on_file_error(self, filename: str, message: str):
@@ -228,9 +250,14 @@ class DownloadPage(Adw.NavigationPage):
         self.window.show_toast(f"Ошибка скачивания {filename}: {message}")
         return GLib.SOURCE_REMOVE
 
-    def _on_all_done(self):
-        self.summary_label.set_label(f"Готово! Файлы сохранены в {self.download_dir}")
-        self.done_status_page.set_description(str(self.download_dir))
+    def _on_all_done(self, result: BatchResult):
+        self.cancel_button.set_visible(False)
+        title, description = summarize_result(result, self.download_dir)
+        self.summary_label.set_label(f"{title} {description}")
+        self.done_status_page.set_title(title)
+        self.done_status_page.set_description(description)
+        if result.cancelled or result.failed:
+            self.done_status_page.set_icon_name("dialog-warning-symbolic")
 
         button_box = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL,

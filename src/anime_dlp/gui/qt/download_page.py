@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 
 from PyQt6.QtCore import QUrl
@@ -14,7 +13,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from anime_dlp.gui.formatting import SpeedTracker, humanize_bytes
+from anime_dlp.core.episodes import BatchResult
+from anime_dlp.gui.desktop import reveal_in_file_manager
+from anime_dlp.gui.formatting import SpeedTracker, humanize_bytes, summarize_result
 from anime_dlp.gui.qt.widgets import ActionRow, NavHeaderBar, PreferencesGroup, StatusPage
 from anime_dlp.gui.qt.workers import DownloadWorker
 
@@ -25,10 +26,10 @@ def _launch_file(window, path: Path):
 
 
 def _show_in_folder(window, path: Path):
-    try:
-        subprocess.run(["explorer", "/select,", str(path)])
-    except OSError as exc:
-        window.show_toast(f"Не удалось открыть проводник: {exc}")
+    # Windows/macOS выделяют файл в Проводнике/Finder; на Linux (или если
+    # команда не запустилась) просто открываем папку, как и GTK-версия.
+    if not reveal_in_file_manager(path):
+        _launch_file(window, path.parent)
 
 
 class _FileRow:
@@ -84,6 +85,7 @@ class _FileRow:
 
     def set_error(self, message: str):
         self.status_label.setText(f"Ошибка: {message}")
+        self.status_label.setToolTip(message)
 
 
 class DownloadPage(QWidget):
@@ -110,6 +112,9 @@ class DownloadPage(QWidget):
 
         header_bar = NavHeaderBar("Скачивание", show_back=True)
         header_bar.back_clicked.connect(self.window.pop_page)
+        self.cancel_button = QPushButton("Отменить")
+        self.cancel_button.clicked.connect(self._on_cancel_clicked)
+        header_bar.add_end_widget(self.cancel_button)
         outer.addWidget(header_bar)
 
         self.stack = QStackedWidget()
@@ -150,6 +155,13 @@ class DownloadPage(QWidget):
         self._worker.fatal_error.connect(self._on_fatal_error)
         self._worker.start()
 
+    def _on_cancel_clicked(self):
+        # Остановка не мгновенная (поток дописывает текущий блок) — экран
+        # «Отменено» покажет _on_all_done, когда поток действительно встанет.
+        self._worker.cancel()
+        self.cancel_button.setEnabled(False)
+        self.summary_label.setText("Отмена...")
+
     def _on_file_start(self, filename: str, filepath: str, index: int, total: int):
         self.summary_label.setText(f"Скачивание {index} из {total}: {filename}")
         file_row = _FileRow(filename, Path(filepath), self.window)
@@ -178,9 +190,14 @@ class DownloadPage(QWidget):
         # страницу успели удалить (воркер теперь переживает свою страницу).
         self.window.show_toast(f"Ошибка: {message}")
 
-    def _on_all_done(self):
-        self.summary_label.setText(f"Готово! Файлы сохранены в {self.download_dir}")
-        self.done_status_page.set_description(str(self.download_dir))
+    def _on_all_done(self, result: BatchResult):
+        self.cancel_button.setVisible(False)
+        title, description = summarize_result(result, self.download_dir)
+        self.summary_label.setText(f"{title} {description}")
+        self.done_status_page.set_title(title)
+        self.done_status_page.set_description(description)
+        if result.cancelled or result.failed:
+            self.done_status_page.set_icon_text("⚠")
 
         button_box = QWidget()
         button_layout = QHBoxLayout(button_box)

@@ -7,6 +7,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, Gtk
 
+from anime_dlp.core import episodes
 from anime_dlp.gui.gtk.window import AnimeDlpWindow
 
 # По умолчанию Gtk.FlowBoxChild сам подсвечивается при наведении/фокусе
@@ -55,4 +56,7 @@ def run_gui(download_dir: Path) -> int:
         win.present()
 
     app.connect("activate", on_activate)
+    # Потоки скачивания — daemon и умрут вместе с процессом, а вот запущенный
+    # ими ffmpeg (HLS) — нет: просим всё остановиться заранее.
+    app.connect("shutdown", lambda _app: episodes.cancel_all())
     return app.run(None)

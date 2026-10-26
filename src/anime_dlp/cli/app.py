@@ -1,10 +1,12 @@
 import sys
+import threading
 from pathlib import Path
 
 from rich.progress import (
     BarColumn,
     DownloadColumn,
     Progress,
+    TaskID,
     TextColumn,
     TimeRemainingColumn,
     TransferSpeedColumn,
@@ -27,12 +29,38 @@ from anime_dlp.cli.prompts import (
     ask_title,
     ask_translation_choice,
 )
-from anime_dlp.core.anime_service import get_anime_info, get_download_link, search_anime
-from anime_dlp.core.downloader import download_episode
-from anime_dlp.filenames import sanitize_filename
+from anime_dlp.core.anime_service import get_anime_info, search_anime
+from anime_dlp.core.episodes import DownloadEvents, EpisodeJob, download_episodes
 
 
-def _download_with_progress(link: str, filepath: Path, quality: int):
+class _RichEvents(DownloadEvents):
+    """Одна строка rich-прогрессбара на серию."""
+
+    def __init__(self, progress: Progress):
+        self.progress = progress
+        self.tasks: dict[str, TaskID] = {}
+
+    def on_start(self, job: EpisodeJob, quality: int) -> None:
+        label = f" ({quality}p)" if quality else ""
+        show_info(f"Скачивание [bold]{job.filename}[/]{label} — {job.index} из {job.total}")
+        self.tasks[job.filename] = self.progress.add_task(
+            f"Downloading {job.filename}", total=None
+        )
+
+    def on_progress(self, job: EpisodeJob, downloaded: int, total: int) -> None:
+        self.progress.update(
+            self.tasks[job.filename], completed=downloaded, total=total or None
+        )
+
+    def on_done(self, job: EpisodeJob) -> None:
+        show_success(f"{job.filename} сохранён")
+
+    def on_error(self, job: EpisodeJob, message: str) -> None:
+        show_error(f"{job.filename}: {message}")
+
+
+def _download_all(selected: dict, translation_id: str, episodes: list[int], download_dir: Path):
+    cancel_event = threading.Event()
     with Progress(
         TextColumn("[progress.description]{task.description}"),
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
@@ -40,15 +68,34 @@ def _download_with_progress(link: str, filepath: Path, quality: int):
         DownloadColumn(),
         TransferSpeedColumn(),
         TimeRemainingColumn(),
+        console=console,
     ) as progress:
-        task = progress.add_task(f"Downloading {filepath.name}", total=None)
-
-        def on_progress(downloaded: int, total: int):
-            if progress.tasks[0].total != total:
-                progress.update(task, total=total)
-            progress.update(task, completed=downloaded)
-
-        download_episode(link, filepath, quality, on_progress=on_progress)
+        # Скачивание идёт в фоновом потоке, чтобы Ctrl+C (он всегда приходит в
+        # главный поток) мог корректно остановить его: недокачанные куски
+        # останутся в .part и продолжатся при следующем запуске.
+        outcome: list = []
+        worker = threading.Thread(
+            target=lambda: outcome.append(
+                download_episodes(
+                    selected,
+                    translation_id,
+                    episodes,
+                    download_dir,
+                    _RichEvents(progress),
+                    cancel_event,
+                )
+            ),
+            daemon=True,
+        )
+        worker.start()
+        try:
+            while worker.is_alive():
+                worker.join(0.2)
+        except KeyboardInterrupt:
+            cancel_event.set()
+            show_info("Остановка... недокачанное продолжится при следующем запуске")
+            worker.join()
+    return outcome[0] if outcome else None
 
 
 def run_cli(download_dir: Path):
@@ -100,22 +147,15 @@ def run_cli(download_dir: Path):
         else:
             eps_to_download = [answer]
 
-    for ep in eps_to_download:
-        ep_label = "фильм" if ep == 0 else f"серия {ep}"
-
-        with Status(f"[cyan]Получение ссылки на {ep_label}...", spinner="dots"):
-            link, quality, _ = get_download_link(sid, ep, translation_id)
-
-        safe_title = sanitize_filename(selected["title"])
-        if ep == 0:
-            filename = f"{safe_title}.mp4"
-        else:
-            filename = f"{ep}.mp4"
-
-        filepath = download_dir / filename
-        show_info(f"Скачивание [bold]{filename}[/] ({quality}p)")
-        _download_with_progress(link, filepath, quality)
-        show_success(f"{filename} сохранён")
+    result = _download_all(selected, translation_id, eps_to_download, download_dir)
+    if result is None or result.cancelled:
+        show_error("Скачивание отменено")
+        sys.exit(130)
+    if result.failed:
+        show_error(
+            "Не удалось скачать: " + ", ".join(job.filename for job in result.failed)
+        )
+        sys.exit(1)
 
     console.print(
         f"\n[bold green]Готово![/] Файлы сохранены в [bold]{download_dir}[/]"

@@ -1,6 +1,8 @@
 import time
+from pathlib import Path
 
 from anime_dlp import __version__
+from anime_dlp.core.episodes import BatchResult
 
 APP_TITLE = f"Anime Downloader v{__version__}"
 
@@ -35,3 +37,20 @@ class SpeedTracker:
         self._last_time = now
         self._last_downloaded = downloaded
         return f"{humanize_bytes(speed)}/с"
+
+
+def summarize_result(result: BatchResult, download_dir: Path) -> tuple[str, str]:
+    """(заголовок, описание) итогового экрана скачивания — один текст для
+    GTK и Qt."""
+    if result.cancelled:
+        return (
+            "Скачивание отменено",
+            f"Недокачанное продолжится при повторном скачивании в {download_dir}",
+        )
+    if result.failed:
+        attempted = len(result.done) + len(result.failed)
+        return (
+            "Готово, но с ошибками",
+            f"Скачано {len(result.done)} из {attempted}. Файлы сохранены в {download_dir}",
+        )
+    return "Готово!", f"Файлы сохранены в {download_dir}"

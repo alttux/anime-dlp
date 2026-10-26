@@ -3,7 +3,7 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 from anime_dlp.core.anime_info import extract_anime_info
-from anime_dlp.gui.qt.pixmap_utils import round_pixmap
+from anime_dlp.gui.qt.pixmap_utils import cover_pixmap, round_pixmap
 from anime_dlp.gui.qt.workers import PosterWorker
 
 _WIDTH = 140
@@ -20,6 +20,9 @@ class CoverCard(QFrame):
         super().__init__(parent)
         self.setObjectName("coverCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Как Gtk.Button в GTK-версии: карточка достижима Tab'ом и
+        # нажимается Enter/пробелом.
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._item = item
         self._on_click = on_click
         self.setFixedWidth(_WIDTH)
@@ -65,10 +68,20 @@ class CoverCard(QFrame):
         (карточки жанров — статичные постеры из gui/genre_posters.py)."""
         self._on_poster_loaded(data, "")
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+    def mouseReleaseEvent(self, event):
+        # По отпусканию внутри карточки, как у кнопки: нажатие с уводом
+        # курсора (например, начало прокрутки) не открывает страницу.
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
+            event.position().toPoint()
+        ):
             self._on_click(self._item)
-        super().mousePressEvent(event)
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self._on_click(self._item)
+            return
+        super().keyPressEvent(event)
 
     def _on_poster_loaded(self, data: bytes, error: str):
         if error or not data:
@@ -76,10 +89,6 @@ class CoverCard(QFrame):
         pixmap = QPixmap()
         if not pixmap.loadFromData(data):
             return
-        pixmap = pixmap.scaled(
-            _WIDTH,
-            _HEIGHT,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
+        self.poster_label.setPixmap(
+            round_pixmap(cover_pixmap(pixmap, _WIDTH, _HEIGHT), radius=_RADIUS)
         )
-        self.poster_label.setPixmap(round_pixmap(pixmap, radius=_RADIUS))
