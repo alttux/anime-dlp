@@ -4,10 +4,11 @@ from pathlib import Path
 import requests
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from anime_dlp.core import favorites
+from anime_dlp.core import favorites, watch_history
 from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
 from anime_dlp.core.cache import fetch_image_cached
 from anime_dlp.gui import prefetch
+from anime_dlp.gui.formatting import format_time
 
 
 class DetailsPage(Adw.NavigationPage):
@@ -19,6 +20,9 @@ class DetailsPage(Adw.NavigationPage):
         self.series_count = None
         self.is_movie = False
         self.episode_checks: dict[int, Gtk.CheckButton] = {}
+        # Строки и кнопки ▶ по номеру серии (0 — фильм).
+        self.episode_rows: dict[int, Adw.ActionRow] = {}
+        self.play_buttons: dict[int, Gtk.Button] = {}
         self._syncing_select_all = False
         self._syncing_favorite = False
 
@@ -71,6 +75,9 @@ class DetailsPage(Adw.NavigationPage):
         toolbar_view.set_content(content_box)
         self.set_child(toolbar_view)
 
+        # Возврат из плеера — обновить отметки «просмотрено» и позиции.
+        self.connect("showing", lambda *_: self._refresh_watched())
+
         threading.Thread(target=self._fetch_info_worker, daemon=True).start()
 
         poster_url = extract_anime_info(self.item).poster_url
@@ -112,6 +119,9 @@ class DetailsPage(Adw.NavigationPage):
 
         self.translations = info["translations"]
         self.series_count = info["series_count"]
+        # Число серий могло вырасти (онгоинг) — галочка «всё просмотрено»
+        # на обложке должна это учитывать.
+        watch_history.set_series_count(self.item["shikimori_id"], self.series_count)
         self._build_form()
         self.stack.set_visible_child_name("form")
         return GLib.SOURCE_REMOVE
@@ -153,6 +163,8 @@ class DetailsPage(Adw.NavigationPage):
         episodes_group = Adw.PreferencesGroup(title="Серии")
         if self.is_movie:
             row = Adw.ActionRow(title="Фильм", subtitle="Определено как фильм")
+            row.add_suffix(self._make_play_button(0))
+            self.episode_rows[0] = row
             episodes_group.add(row)
         else:
             episodes_group.add(self._build_episode_checklist(info))
@@ -160,6 +172,61 @@ class DetailsPage(Adw.NavigationPage):
         self.form_box.append(episodes_group)
 
         self._apply_series_range()
+        self._refresh_watched()
+
+    def _make_play_button(self, episode: int) -> Gtk.Button:
+        button = Gtk.Button(
+            icon_name="media-playback-start-symbolic",
+            tooltip_text="Смотреть" if episode == 0 else f"Смотреть серию {episode}",
+            valign=Gtk.Align.CENTER,
+            css_classes=["flat", "circular"],
+        )
+        button.connect("clicked", lambda *_: self._on_play_clicked(episode))
+        self.play_buttons[episode] = button
+        return button
+
+    def _refresh_watched(self):
+        """Подсвечивает просмотренные серии и пишет, где остановились."""
+        if not self.episode_rows:
+            return
+        sid = self.item["shikimori_id"]
+        watched = watch_history.watched_episodes(sid)
+        for episode, row in self.episode_rows.items():
+            if episode in watched:
+                row.add_css_class("watched-episode")
+                row.set_subtitle("Просмотрено")
+                continue
+            row.remove_css_class("watched-episode")
+            position = watch_history.get_position(sid, episode)
+            if position:
+                row.set_subtitle(f"Остановились на {format_time(position)}")
+            else:
+                row.set_subtitle("Определено как фильм" if episode == 0 else "")
+
+    def _on_play_clicked(self, episode: int):
+        selected = self.translation_combo.get_selected()
+        if selected == Gtk.INVALID_LIST_POSITION or not self.translations:
+            self.window.show_toast("Выберите озвучку")
+            return
+        try:
+            from anime_dlp.gui.gtk.player_page import PlayerPage, player_unavailable_reason
+        except (ImportError, ValueError) as exc:
+            # ValueError — gi.require_version: нет typelib GStreamer.
+            self.window.show_toast(f"Плеер недоступен: не установлен GStreamer ({exc})")
+            return
+        reason = player_unavailable_reason()
+        if reason:
+            self.window.show_toast(reason)
+            return
+        self.window.push_page(
+            PlayerPage(
+                window=self.window,
+                item=self.item,
+                translation=self.translations[selected],
+                series_count=self.series_count,
+                episode=episode,
+            )
+        )
 
     def _build_header(self, info: AnimeInfo) -> Gtk.Box:
         title_label = Gtk.Label(
@@ -284,6 +351,8 @@ class DetailsPage(Adw.NavigationPage):
             row.set_activatable_widget(check)
             if info.duration:
                 row.add_suffix(Gtk.Label(label=f"~{info.duration} мин", css_classes=["dim-label"]))
+            row.add_suffix(self._make_play_button(n))
+            self.episode_rows[n] = row
             listbox.append(row)
 
         scrolled = Gtk.ScrolledWindow(min_content_height=300, hexpand=True, vexpand=False)
@@ -348,6 +417,8 @@ class DetailsPage(Adw.NavigationPage):
         for n, check in self.episode_checks.items():
             in_range = first <= n <= last
             check.set_sensitive(in_range)
+            # Серии вне диапазона озвучки не существует — смотреть нечего.
+            self.play_buttons[n].set_sensitive(in_range)
             if not in_range and check.get_active():
                 check.set_active(False)
         self._sync_select_all_state()

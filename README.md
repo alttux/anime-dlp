@@ -215,11 +215,11 @@ anime-dlp --gui
 <details>
 <summary><b>GUI на macOS — через Homebrew</b></summary>
 
-1. Поставьте [Homebrew](https://brew.sh/), затем GTK4/libadwaita/PyGObject
-   и ffmpeg:
+1. Поставьте [Homebrew](https://brew.sh/), затем GTK4/libadwaita/PyGObject,
+   ffmpeg и GStreamer (нужен встроенному плееру для просмотра онлайн):
    ```bash
    brew install gtk4 libadwaita pygobject3 adwaita-icon-theme \
-                gobject-introspection ffmpeg
+                gobject-introspection ffmpeg gstreamer
    ```
 2. Создайте виртуальное окружение с доступом к системным пакетам Homebrew
    (иначе Python не увидит PyGObject, поставленный через brew) и установите

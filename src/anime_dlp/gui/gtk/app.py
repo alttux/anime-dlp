@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import gi
@@ -32,6 +33,39 @@ flowboxchild:selected {
     border-radius: 12px;
 }
 
+.watched-episode {
+    background-color: alpha(@success_color, 0.16);
+}
+
+.watched-badge {
+    background-color: @success_bg_color;
+    color: @success_fg_color;
+    border-radius: 999px;
+    padding: 4px;
+    margin: 6px;
+}
+
+.player-video {
+    background-color: black;
+}
+
+.player-controls {
+    border-radius: 12px;
+    margin: 12px;
+    padding: 8px 12px;
+}
+
+.player-panel {
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.player-osd-text {
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 1px 3px black;
+}
+
 .pill-badge {
     background-color: alpha(currentColor, 0.1);
     border-radius: 999px;
@@ -39,6 +73,15 @@ flowboxchild:selected {
     font-size: 0.9em;
 }
 """
+
+
+def _on_shutdown(_app):
+    episodes.cancel_all()
+    # Плеер импортируется лениво (нужен GStreamer) — останавливаем, только
+    # если его вообще открывали: заодно он сохранит позицию просмотра.
+    player_page = sys.modules.get("anime_dlp.gui.gtk.player_page")
+    if player_page is not None:
+        player_page.stop_all()
 
 
 def run_gui(download_dir: Path) -> int:
@@ -58,5 +101,5 @@ def run_gui(download_dir: Path) -> int:
     app.connect("activate", on_activate)
     # Потоки скачивания — daemon и умрут вместе с процессом, а вот запущенный
     # ими ffmpeg (HLS) — нет: просим всё остановиться заранее.
-    app.connect("shutdown", lambda _app: episodes.cancel_all())
+    app.connect("shutdown", _on_shutdown)
     return app.run(None)

@@ -2,6 +2,7 @@ import threading
 
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango
 
+from anime_dlp.core import watch_history
 from anime_dlp.core.anime_info import extract_anime_info
 from anime_dlp.core.cache import fetch_image_cached
 
@@ -27,7 +28,22 @@ class CoverCard(Gtk.Button):
         self.picture.add_css_class("card")
         self.picture.add_css_class("rounded-poster")
         self.picture.set_overflow(Gtk.Overflow.HIDDEN)
-        box.append(self.picture)
+
+        # Зелёная галочка — все серии просмотрены (core/watch_history.py).
+        self.watched_badge = Gtk.Image(
+            icon_name="object-select-symbolic",
+            halign=Gtk.Align.END,
+            valign=Gtk.Align.START,
+            css_classes=["watched-badge"],
+            tooltip_text="Всё просмотрено",
+            visible=False,
+        )
+        picture_overlay = Gtk.Overlay(child=self.picture)
+        picture_overlay.add_overlay(self.watched_badge)
+        box.append(picture_overlay)
+        # map — карточка стала видимой: при первом показе и при возврате на
+        # вкладку со страницы аниме/плеера, где отметки могли измениться.
+        self.connect("map", lambda *_: self.refresh_watched())
 
         title_label = Gtk.Label(
             label=title or (item or {}).get("title", "Unknown"),
@@ -47,7 +63,12 @@ class CoverCard(Gtk.Button):
         """Привязывает запись аниме к уже показанной карточке и подгружает
         её обложку."""
         self._item = item
+        self.refresh_watched()
         self._start_poster_load()
+
+    def refresh_watched(self):
+        sid = (self._item or {}).get("shikimori_id")
+        self.watched_badge.set_visible(watch_history.is_fully_watched(sid))
 
     def set_static_cover(self, data: bytes):
         """Показывает готовые байты обложки напрямую, без сетевого запроса
