@@ -466,13 +466,30 @@ class PlayerPage(Adw.NavigationPage):
         self._update_play_button()
         self._schedule_hide_controls()
 
+    def _pause_pipeline(self):
+        """Переводит конвейер в PAUSED, не зависнув у конца файла.
+
+        Если seek ушёл за конец одного из потоков (аудио короче видео), этот
+        поток уже отдал EOS, и PAUSED-preroll без ASYNC_DONE никогда не
+        завершается — кадр застывает, состояние остаётся PLAYING→PAUSED.
+        Flush-seek на текущую позицию сбрасывает EOS у потоков и даёт
+        новый preroll."""
+        ok, position = self.playbin.query_position(Gst.Format.TIME)
+        if ok:
+            self.playbin.seek_simple(
+                Gst.Format.TIME,
+                Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
+                position,
+            )
+        self.playbin.set_state(Gst.State.PAUSED)
+
     def _on_buffering(self, percent: int):
         was_buffering = self._buffering
         self._buffering = percent < 100
         if self._phase != "ready":
             return
         if self._buffering and not was_buffering:
-            self.playbin.set_state(Gst.State.PAUSED)
+            self._pause_pipeline()
             self._show_loading("Буферизация…")
         elif not self._buffering and was_buffering:
             self._hide_loading()
@@ -625,7 +642,10 @@ class PlayerPage(Adw.NavigationPage):
             return
         self._want_playing = not self._want_playing
         if self._phase == "ready" and not self._buffering:
-            self.playbin.set_state(Gst.State.PLAYING if self._want_playing else Gst.State.PAUSED)
+            if self._want_playing:
+                self.playbin.set_state(Gst.State.PLAYING)
+            else:
+                self._pause_pipeline()
         if not self._want_playing:
             self._save_progress()
         self._update_play_button()
