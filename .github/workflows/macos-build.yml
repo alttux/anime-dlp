@@ -19,7 +19,17 @@ permissions:
 jobs:
   build-arm64:
     name: macOS aarch64 (.app + .dmg)
-    runs-on: macos-14
+    # Не ниже macos-15: Homebrew поддерживает только macOS 15+ и готовых
+    # бутылок под Sonoma (14) больше не выпускает — на macos-14 gtk4/
+    # libadwaita/librsvg/py3cairo собирались из исходников и падали
+    # («python@3.15 not present or broken»).
+    runs-on: macos-15
+    env:
+      # pygobject3/py3cairo из Homebrew собраны только под те версии Python,
+      # что формула перечисляет в зависимостях сборки (сейчас 3.14 и 3.15).
+      # Под 3.13 их больше нет — venv с --system-site-packages не видел бы gi.
+      # 3.14, а не 3.15: её уже поддерживает PyInstaller.
+      PYTHON_FORMULA: python@3.14
 
     steps:
       - name: Checkout repository
@@ -34,17 +44,21 @@ jobs:
         run: |
           echo "=== DEBUG: Installing Homebrew packages ==="
           brew update
-          brew install python@3.13 gtk4 libadwaita adwaita-icon-theme \
+          brew install "$PYTHON_FORMULA" gtk4 libadwaita adwaita-icon-theme \
                         gobject-introspection pygobject3 py3cairo librsvg \
                         gstreamer create-dmg
           brew link --overwrite libadwaita
-          brew list --formula | grep -E "(python@3.13|gtk4|libadwaita|gobject-introspection|pygobject3|py3cairo|librsvg|gstreamer)"
+          brew list --formula | grep -E "($PYTHON_FORMULA|gtk4|libadwaita|gobject-introspection|pygobject3|py3cairo|librsvg|gstreamer)"
 
       - name: Prepare Homebrew virtual environment
         run: |
-          PYTHON_PATH="$(brew --prefix python@3.13)/bin/python3.13"
+          PYTHON_PATH="$(brew --prefix "$PYTHON_FORMULA")/bin/python${PYTHON_FORMULA#python@}"
           "$PYTHON_PATH" -m venv .venv-homebrew --system-site-packages
           source .venv-homebrew/bin/activate
+          # Сразу и понятно падаем, если Homebrew снова сменит версию Python
+          # у pygobject3, а не через три шага внутри PyInstaller.
+          python -c "import gi, cairo; print('PyGObject', gi.__version__, 'for', __import__('sys').version)" \
+            || { echo "::error::pygobject3 из Homebrew не собран под $PYTHON_FORMULA — обновите PYTHON_FORMULA"; exit 1; }
           python -m pip install --upgrade pip wheel
           python -m pip install . PyInstaller pyinstaller-hooks-contrib
           pip list | grep -iE "(anime.dlp|PyInstaller)"

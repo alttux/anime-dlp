@@ -305,10 +305,15 @@ anime-dlp/
   обычный `pip3 install .` из исходников (`io.github.alttux.AnimeDlp.yml`),
   поэтому AI-обложки жанров попадают в сборку сами, через
   `[tool.setuptools.package-data]` в `pyproject.toml` — отдельных шагов в
-  манифесте для них не нужно.
+  манифесте для них не нужно. Зависимости Python — `flatpak/python3-deps.json`
+  (flatpak-pip-generator, см. README); у Pygments там `--ignore-installed`,
+  потому что он есть и в самом GNOME SDK: при расхождении версий pip иначе
+  пытается удалить копию из read-only `/usr`, и сборка падает.
 - macOS (GitHub Actions, `.github/workflows/macos-build.yml`, `runs-on:
-  macos-14`, только `aarch64`): ставит GTK4/libadwaita/PyGObject через
-  Homebrew, генерирует иконку (`packaging/macos/make_icns.sh`), собирает
+  macos-15`, только `aarch64`): ставит GTK4/libadwaita/PyGObject через
+  Homebrew (раннер не ниже macOS 15 — для более старых Homebrew не выпускает
+  бутылок и собирает всё из исходников; Python в venv — `PYTHON_FORMULA`,
+  должен совпадать с одной из версий, под которые собран `pygobject3`), генерирует иконку (`packaging/macos/make_icns.sh`), собирает
   `dist/AnimeDlp.app` через PyInstaller (`packaging/macos/build.sh` +
   `packaging/macos_gui_entry.py`, GUI запускается напрямую, без
   CLI-диалога, флаг `--copy-metadata anime-dlp` нужен, чтобы
