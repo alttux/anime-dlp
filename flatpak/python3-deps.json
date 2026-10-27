@@ -165,7 +165,7 @@
             "name": "python3-Pygments",
             "buildsystem": "simple",
             "build-commands": [
-                "pip3 install --verbose --exists-action=i --no-index --find-links=\"file://${PWD}\" --prefix=${FLATPAK_DEST} \"Pygments==2.20.0\" --no-build-isolation"
+                "pip3 install --verbose --exists-action=i --no-index --find-links=\"file://${PWD}\" --prefix=${FLATPAK_DEST} \"Pygments==2.20.0\" --no-build-isolation --ignore-installed"
             ],
             "sources": [
                 {

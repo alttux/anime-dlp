@@ -104,10 +104,15 @@ flatpak build-bundle repo ../anime-dlp.flatpak io.github.alttux.AnimeDlp
 > curl -sSLO https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/pip/flatpak-pip-generator.py
 > pip install "requirements-parser>=0.11.0,<1.0.0" "packaging>=23.0"
 > python flatpak-pip-generator.py --runtime='org.gnome.Sdk//49' \
->     --requirements-file=../requirements.txt --output python3-deps
+>     --requirements-file=../requirements.txt --output python3-deps \
+>     --ignore-installed=Pygments
 > ```
 > Флаг `--runtime` заставляет резолвить пакеты внутри SDK, чтобы версии
-> совпадали с Python в рантайме.
+> совпадали с Python в рантайме. `--ignore-installed=Pygments` обязателен:
+> Pygments есть в самом GNOME SDK (`/usr`, только для чтения), и когда его
+> версия в SDK расходится с нашей, pip пытается удалить системную копию, и
+> сборка падает (`Read-only file system: '/usr/bin/pygmentize'`). С флагом
+> pip ставит свою копию в `/app`, не трогая SDK.
 
 В Flatpak файлы по умолчанию скачиваются в `~/Downloads`, а токен Kodik
 хранится в `~/.var/app/io.github.alttux.AnimeDlp/data/`.
