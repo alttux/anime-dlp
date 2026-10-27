@@ -11,6 +11,13 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
+  # Звук онлайн-плеера (GStreamer → PulseAudio/PipeWire).
+  - --socket=pulseaudio
+  # GStreamer (playbin, hlsdemux, gtk4paintablesink) приходит из рантайма
+  # org.gnome.Platform; кодеки (libav, H.264/AAC) — из расширения
+  # org.freedesktop.Platform.GStreamer, которое flatpak ставит вместе с
+  # рантаймом. Если плеер пишет «не хватает модулей GStreamer» — проверьте,
+  # что расширение установлено: flatpak list --runtime | grep GStreamer.
   # Папка загрузок по умолчанию (~/Downloads) и типичная папка для видео.
   - --filesystem=xdg-download
   - --filesystem=xdg-videos

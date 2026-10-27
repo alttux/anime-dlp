@@ -179,3 +179,6 @@ flatpak/flatpak-pip-generator.py
 *.flatpak
 # Избранное GUI (лежит рядом с токеном при запуске из исходников)
 favorites.json
+
+# Сгенерированная иконка macOS (packaging/macos/make_icns.sh)
+packaging/macos/AnimeDlp.icns

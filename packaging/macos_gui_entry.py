@@ -6,9 +6,10 @@
 которая по умолчанию ведёт себя как CLI и ждёт `--gui` явным флагом.
 
 Переменные окружения для GTK4/libadwaita (typelib'ы, схемы GSettings,
-темы иконок) выставляются здесь же, до `import gi`, потому что внутри
-бандла они лежат не в системных путях Homebrew, а в `sys._MEIPASS`
-(см. packaging/macos/build.sh, флаги --add-data).
+темы иконок) и GStreamer (плагины, scanner) выставляются здесь же, до
+`import gi`, потому что внутри бандла они лежат не в системных путях
+Homebrew, а в `sys._MEIPASS` (см. packaging/macos/build.sh, флаги
+--add-data и --add-binary).
 """
 
 import os
@@ -23,6 +24,12 @@ if getattr(sys, "frozen", False):
     )
     os.environ["GSETTINGS_SCHEMA_DIR"] = str(
         bundle_resources / "share" / "glib-2.0" / "schemas"
+    )
+    # Только плагины из бандла: системные из Homebrew в .app не нужны и
+    # могут не совпасть по версии с библиотеками внутри бандла.
+    os.environ["GST_PLUGIN_SYSTEM_PATH"] = str(bundle_resources / "gst_plugins")
+    os.environ["GST_PLUGIN_SCANNER"] = str(
+        bundle_resources / "gst_libexec" / "gst-plugin-scanner"
     )
 
 from anime_dlp.config import DOWNLOAD_DIR

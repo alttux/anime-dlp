@@ -36,9 +36,9 @@ jobs:
           brew update
           brew install python@3.13 gtk4 libadwaita adwaita-icon-theme \
                         gobject-introspection pygobject3 py3cairo librsvg \
-                        create-dmg
+                        gstreamer create-dmg
           brew link --overwrite libadwaita
-          brew list --formula | grep -E "(python@3.13|gtk4|libadwaita|gobject-introspection|pygobject3|py3cairo|librsvg)"
+          brew list --formula | grep -E "(python@3.13|gtk4|libadwaita|gobject-introspection|pygobject3|py3cairo|librsvg|gstreamer)"
 
       - name: Prepare Homebrew virtual environment
         run: |
