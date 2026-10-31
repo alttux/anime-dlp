@@ -1,8 +1,10 @@
-"""Онлайн-плеер (только GTK): HLS-плейлист Kodik через GStreamer.
+"""Онлайн-плеер (только GTK): воспроизведение видео Kodik через GStreamer.
 
-Конвейер: playbin → gtk4paintablesink → Gtk.Picture. Классический playbin, а
-не playbin3: на потоках Kodik у playbin3 (hlsdemux2) перемотка занимала
-~6 с, а перемотка назад зависала, у playbin — доли секунды.
+Конвейер: playbin → gtk4paintablesink → Gtk.Picture. Стриминг идёт через прямой
+MP4 по HTTP Range (с фолбэком на HLS-манифест): у HLS-потоков Kodik на стыках
+6-секундных сегментов сбиваются continuity counter в MPEG-TS, из-за чего
+tsdemux в GStreamer сбрасывает данные и видео «сыплется» и заикается. Прямой
+MP4 играет плавно и без артефактов.
 
 Как гарантируется, что играет именно выбранная серия:
   * каждая загрузка (смена серии, качества, повтор после ошибки) получает
@@ -401,7 +403,7 @@ class PlayerPage(Adw.NavigationPage):
         if self._pending_seek is not None and self._pending_seek < 1:
             self._pending_seek = None
 
-        self.playbin.set_property("uri", src.playlist_url(self._quality))
+        self.playbin.set_property("uri", src.stream_url(self._quality))
         self._phase = "prerolling"
         self.playbin.set_state(Gst.State.PAUSED)
         # Пока смотрим эту серию, ссылка на следующую уже будет готова.

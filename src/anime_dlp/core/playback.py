@@ -1,12 +1,16 @@
 """Источник серий для онлайн-плеера (общий, без привязки к GUI-тулкиту).
 
-Отвечает на вопросы «какой m3u8 играть для серии N в качестве Q» и «какая
+Отвечает на вопросы «какой URL играть для серии N в качестве Q» и «какая
 серия следующая/предыдущая» для выбранной озвучки. Всё, что касается сети,
 — блокирующие вызовы: GUI зовёт их из фонового потока.
 
 Kodik не отдаёт master-плейлист со всеми качествами: на каждое качество
-свой `<q>.mp4:hls:manifest.m3u8` рядом с mp4. Поэтому смена качества —
-это загрузка другого плейлиста той же серии с переходом на ту же позицию.
+свой прямой `<q>.mp4` (поддерживающий HTTP Range-запросы) и сгенерированный
+`<q>.mp4:hls:manifest.m3u8` рядом с ним. Онлайн-плеер предпочитает прямой
+MP4: при HLS-стриминге серверы Kodik отдают TS-сегменты с расходящимися
+счётчиками непрерывности (continuity counter mismatch) на стыках 6-секундных
+фрагментов, из-за чего демультиплексор GStreamer сбрасывает данные и видео
+регулярно прерывается и «сыплется». При недоступности MP4 используется HLS.
 """
 
 import threading
@@ -15,6 +19,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 
 from anime_dlp.core.anime_service import get_download_link
+from anime_dlp.core.http import TIMEOUT, get_session
 
 QUALITIES = (360, 480, 720)
 DEFAULT_QUALITY = 720
@@ -31,6 +36,7 @@ class EpisodeSource:
     link: str  # //host/path/ — без схемы и качества, как отдаёт get_link
     max_quality: int
     skip_segments: tuple[tuple[int, int], ...]  # опенинг/эндинг, секунды
+    supports_mp4: bool = True
 
     @property
     def qualities(self) -> list[int]:
@@ -42,8 +48,27 @@ class EpisodeSource:
         candidates = [q for q in self.qualities if q <= preferred]
         return max(candidates) if candidates else min(self.qualities)
 
-    def playlist_url(self, quality: int) -> str:
+    def direct_url(self, quality: int) -> str:
+        return f"https:{self.link}{quality}.mp4"
+
+    def hls_url(self, quality: int) -> str:
         return f"https:{self.link}{quality}.mp4:hls:manifest.m3u8"
+
+    def stream_url(self, quality: int) -> str:
+        """Рабочий URL для потокового воспроизведения.
+
+        По умолчанию отдаёт прямой MP4 (с поддержкой HTTP Range), что избавляет
+        от артефактов и регулярных прерываний, возникающих при воспроизведении
+        HLS-потоков Kodik (в них MPEG-TS сегменты имеют сброшенные счётчики
+        непрерывности). Если MP4 недоступен, откатывается на HLS-манифест.
+        """
+        if self.supports_mp4:
+            return self.direct_url(quality)
+        return self.hls_url(quality)
+
+    def playlist_url(self, quality: int) -> str:
+        """Совместимость с кодом, ожидающим имя playlist_url."""
+        return self.stream_url(quality)
 
 
 def episode_range(series_count: int | None, translation: dict) -> list[int]:
@@ -90,11 +115,25 @@ class PlaybackSource:
         link, max_quality, skip = get_download_link(
             self.shikimori_id, episode, self.translation_id
         )
+        max_q = int(max_quality)
+        supports_mp4 = True
+        try:
+            test_url = f"https:{link}{max_q}.mp4"
+            resp = get_session().get(
+                test_url, headers={"Range": "bytes=0-0"}, stream=True, timeout=TIMEOUT
+            )
+            if resp.status_code >= 400:
+                supports_mp4 = False
+            resp.close()
+        except Exception:
+            supports_mp4 = False
+
         source = EpisodeSource(
             episode=episode,
             link=link,
-            max_quality=int(max_quality),
+            max_quality=max_q,
             skip_segments=tuple((int(a), int(b)) for a, b in (skip or []) if b > a),
+            supports_mp4=supports_mp4,
         )
         with self._lock:
             self._cache[episode] = (time.monotonic(), source)
