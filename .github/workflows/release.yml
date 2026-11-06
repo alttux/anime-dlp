@@ -108,12 +108,22 @@ jobs:
       tag_name: ${{ needs.tag.outputs.tag }}
 
   macos:
-    name: macOS artifacts
+    name: macOS artifacts (ARM64)
     needs: tag
     if: needs.tag.outputs.should_release == 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/macos-build.yml
+    with:
+      tag_name: ${{ needs.tag.outputs.tag }}
+
+  macos-intel:
+    name: macOS artifacts (Intel x86_64)
+    needs: tag
+    if: needs.tag.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/macos-intel-build.yml
     with:
       tag_name: ${{ needs.tag.outputs.tag }}
 

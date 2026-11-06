@@ -125,7 +125,8 @@ anime-dlp/
 ├── .github/workflows/
 │   ├── flatpak.yml                # CI: сборка Flatpak (Linux)
 │   ├── windows-build.yml          # CI: сборка Windows CLI .exe (PyInstaller, без GUI)
-│   └── macos-build.yml            # CI: сборка macOS .app + .dmg-установщика (GUI, Homebrew + PyInstaller)
+│   ├── macos-build.yml            # CI: сборка macOS Apple Silicon .app + .dmg (GUI, Homebrew + PyInstaller)
+│   └── macos-intel-build.yml      # CI: отдельная сборка macOS Intel x86_64 .app + .dmg (GUI, Homebrew + PyInstaller)
 ├── build.sh                       # Сборка Python-пакета (wheel/sdist) + бамп версии
 ├── pyproject.toml                 # Метаданные и зависимости пакета
 ├── requirements.txt                # Зафиксированные версии зависимостей
@@ -151,13 +152,9 @@ anime-dlp/
   последним `<release>` в `data/io.github.alttux.AnimeDlp.metainfo.xml` —
   версия общая для wheel/sdist и Flatpak-пакета и растёт при каждой сборке
   любого из них.
-- macOS (GitHub Actions, `.github/workflows/macos-build.yml`, `runs-on:
-  macos-14`, только `aarch64`): ставит GTK4/libadwaita/PyGObject через
-  Homebrew, генерирует иконку (`packaging/macos/make_icns.sh`), собирает
-  `dist/AnimeDlp.app` через PyInstaller (`packaging/macos/build.sh` +
-  `packaging/macos_gui_entry.py`, GUI запускается напрямую, без CLI-диалога),
-  упаковывает в `.dmg` через `create-dmg` и прикрепляет его к GitHub Release
-  при пуше тега `v*.*.*`.
+- macOS (GitHub Actions):
+  - Apple Silicon (`.github/workflows/macos-build.yml`, `runs-on: macos-15`, `aarch64`): ставит GTK4/libadwaita/PyGObject/GStreamer через Homebrew, генерирует иконку (`packaging/macos/make_icns.sh`), собирает `dist/AnimeDlp.app` через PyInstaller (`packaging/macos/build.sh` + `packaging/macos_gui_entry.py`), упаковывает в `.dmg` через `create-dmg` и прикрепляет к GitHub Release.
+  - Intel (`.github/workflows/macos-intel-build.yml`, `runs-on: macos-13`, `x86_64`): отдельная сборка под архитектуру Intel x86_64 на базе Python 3.13 и Homebrew, бандлит GStreamer для воспроизведения видео, упаковывает в `AnimeDlp-macOS-<версия>-x86_64.dmg` и прикрепляет к релизу.
 - Windows (GitHub Actions, `.github/workflows/windows-build.yml`): собирает
   автономный CLI-исполняемый файл (`.exe`, без GUI) через PyInstaller
   (`packaging/pyinstaller_entry.py`) и прикрепляет его к GitHub Release при
