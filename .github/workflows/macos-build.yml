@@ -19,14 +19,16 @@ permissions:
 jobs:
   build-x86_64:
     name: macOS x86_64 (.app + .dmg)
-    # macos-13 — последний Intel-раннер GitHub Actions (Ventura, x86_64).
-    # macos-14 и выше работают только на Apple Silicon.
-    runs-on: macos-13
+    # Собирается на том же macos-15 (Apple Silicon), но через Rosetta 2:
+    # устанавливаем второй Homebrew в /usr/local (стандартный Intel-префикс)
+    # через arch -x86_64 и получаем нативный x86_64-бандл без macos-13
+    # (Intel-раннеры GitHub практически недоступны из-за малого пула).
+    runs-on: macos-15
     env:
-      # pygobject3/py3cairo из Homebrew собраны только под те версии Python,
-      # что формула перечисляет в зависимостях сборки. На x86_64 (macos-13)
-      # Homebrew продолжает собирать бутылки под python@3.13.
-      # Используем 3.13 — PyInstaller её уже полностью поддерживает.
+      # Intel Homebrew живёт в /usr/local; brew --prefix вернёт именно его,
+      # если вызывать через arch -x86_64.
+      INTEL_BREW: /usr/local/bin/brew
+      # pygobject3 из Intel Homebrew собран под python@3.13.
       PYTHON_FORMULA: python@3.13
 
     steps:
@@ -35,40 +37,88 @@ jobs:
         with:
           ref: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref }}
 
-      - name: Install Homebrew dependencies
-        run: |
-          echo "=== DEBUG: Installing Homebrew packages ==="
-          brew update
-          brew install "$PYTHON_FORMULA" gtk4 libadwaita adwaita-icon-theme \
-                        gobject-introspection pygobject3 py3cairo librsvg \
-                        gstreamer create-dmg
-          brew link --overwrite libadwaita
-          brew list --formula | grep -E "($PYTHON_FORMULA|gtk4|libadwaita|gobject-introspection|pygobject3|py3cairo|librsvg|gstreamer)"
+      - name: Install Rosetta 2
+        run: softwareupdate --install-rosetta --agree-to-license
 
-      - name: Prepare Homebrew virtual environment
+      - name: Install Intel Homebrew via Rosetta 2
         run: |
-          PYTHON_PATH="$(brew --prefix "$PYTHON_FORMULA")/bin/python${PYTHON_FORMULA#python@}"
-          "$PYTHON_PATH" -m venv .venv-homebrew --system-site-packages
-          source .venv-homebrew/bin/activate
-          # Сразу и понятно падаем, если Homebrew снова сменит версию Python
-          # у pygobject3, а не через три шага внутри PyInstaller.
+          echo "=== DEBUG: Installing Intel (x86_64) Homebrew to /usr/local ==="
+          # Homebrew install.sh определяет архитектуру по uname -m; запускаем
+          # через arch -x86_64 чтобы оно само выбрало /usr/local как prefix.
+          arch -x86_64 /bin/bash -c \
+            "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+            <<< ""
+          echo "Intel brew: $(/usr/local/bin/brew --prefix)"
+
+      - name: Install Homebrew dependencies (x86_64)
+        run: |
+          echo "=== DEBUG: Installing packages via Intel Homebrew ==="
+          arch -x86_64 "$INTEL_BREW" update
+          arch -x86_64 "$INTEL_BREW" install "$PYTHON_FORMULA" gtk4 libadwaita \
+            adwaita-icon-theme gobject-introspection pygobject3 py3cairo \
+            librsvg gstreamer create-dmg
+          arch -x86_64 "$INTEL_BREW" link --overwrite libadwaita
+          arch -x86_64 "$INTEL_BREW" list --formula | grep -E "($PYTHON_FORMULA|gtk4|libadwaita|gobject-introspection|pygobject3|py3cairo|librsvg|gstreamer)"
+
+      - name: Prepare x86_64 virtual environment
+        run: |
+          PYTHON_PATH="$(/usr/local/bin/brew --prefix "$PYTHON_FORMULA")/bin/python${PYTHON_FORMULA#python@}"
+          arch -x86_64 "$PYTHON_PATH" -m venv .venv-x86 --system-site-packages
+          # Активируем venv; arch -x86_64 наследуется через PATH внутри venv
+          source .venv-x86/bin/activate
           python -c "import gi, cairo; print('PyGObject', gi.__version__, 'for', __import__('sys').version)" \
-            || { echo "::error::pygobject3 из Homebrew не собран под $PYTHON_FORMULA — обновите PYTHON_FORMULA"; exit 1; }
+            || { echo "::error::pygobject3 из Intel Homebrew не собран под $PYTHON_FORMULA — обновите PYTHON_FORMULA"; exit 1; }
           python -m pip install --upgrade pip wheel
           python -m pip install . PyInstaller pyinstaller-hooks-contrib
           pip list | grep -iE "(anime.dlp|PyInstaller)"
 
       - name: Generate app icon (.icns)
         run: |
-          source .venv-homebrew/bin/activate
+          # rsvg-convert из arm64 Homebrew подходит — это инструмент сборки,
+          # его архитектура не влияет на содержимое .icns.
           chmod +x packaging/macos/make_icns.sh
           ./packaging/macos/make_icns.sh
 
-      - name: Build .app bundle with PyInstaller
+      - name: Build x86_64 .app bundle with PyInstaller
         run: |
-          source .venv-homebrew/bin/activate
-          chmod +x packaging/macos/build.sh
-          ./packaging/macos/build.sh
+          source .venv-x86/bin/activate
+          INTEL_BREW_PREFIX="$(/usr/local/bin/brew --prefix)"
+          export GI_TYPELIB_PATH="$INTEL_BREW_PREFIX/lib/girepository-1.0"
+          export DYLD_LIBRARY_PATH="$INTEL_BREW_PREFIX/lib:${DYLD_LIBRARY_PATH:-}"
+          export PKG_CONFIG_PATH="$INTEL_BREW_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export XDG_DATA_DIRS="$INTEL_BREW_PREFIX/share:${XDG_DATA_DIRS:-}"
+
+          GST_PREFIX="$INTEL_BREW_PREFIX/opt/gstreamer"
+          GST_BUNDLE_ARGS=()
+          for lib in "$GST_PREFIX"/lib/libgst*.dylib; do
+            GST_BUNDLE_ARGS+=(--add-binary "$lib:.")
+          done
+          for plugin in "$GST_PREFIX"/lib/gstreamer-1.0/*.dylib; do
+            GST_BUNDLE_ARGS+=(--add-binary "$plugin:gst_plugins")
+          done
+          GST_BUNDLE_ARGS+=(--add-binary "$GST_PREFIX/libexec/gstreamer-1.0/gst-plugin-scanner:gst_libexec")
+          echo "=== DEBUG: GStreamer bundle args: ${#GST_BUNDLE_ARGS[@]} ==="
+
+          rm -rf build dist AnimeDlp.spec
+
+          pyinstaller \
+            --noconfirm \
+            --windowed \
+            --name AnimeDlp \
+            --icon packaging/macos/AnimeDlp.icns \
+            --collect-all anime_parsers_ru \
+            --copy-metadata anime-dlp \
+            --hidden-import gi \
+            --add-data "$GI_TYPELIB_PATH:gi_typelibs" \
+            --add-data "$INTEL_BREW_PREFIX/share/glib-2.0/schemas:share/glib-2.0/schemas" \
+            --add-data "$INTEL_BREW_PREFIX/share/icons/Adwaita:share/icons/Adwaita" \
+            --add-data "$INTEL_BREW_PREFIX/share/icons/hicolor:share/icons/hicolor" \
+            --add-data "src/anime_dlp/gui/assets/genre_posters:anime_dlp/gui/assets/genre_posters" \
+            "${GST_BUNDLE_ARGS[@]}" \
+            packaging/macos_gui_entry.py
+
+          echo "=== DEBUG: Build finished, dist/AnimeDlp.app ==="
+          file dist/AnimeDlp.app/Contents/MacOS/AnimeDlp
 
       - name: Determine artifact names
         id: artifact-info
@@ -101,26 +151,20 @@ jobs:
             echo "=== ERROR: AnimeDlp executable missing/not executable ==="
             exit 1
           fi
+          # Проверяем что бандл действительно x86_64
+          ARCH=$(file dist/AnimeDlp.app/Contents/MacOS/AnimeDlp | grep -o "x86_64\|arm64" | head -1)
+          echo "=== DEBUG: Binary arch: $ARCH ==="
+          if [ "$ARCH" != "x86_64" ]; then
+            echo "=== ERROR: Expected x86_64, got $ARCH ==="
+            exit 1
+          fi
           echo "=== DEBUG: App bundle size: $(du -sh dist/AnimeDlp.app) ==="
-
-      - name: Smoke-test bundled GUI imports
-        run: |
-          source .venv-homebrew/bin/activate
-          GI_TYPELIB_PATH="dist/AnimeDlp.app/Contents/Frameworks/gi_typelibs" \
-          XDG_DATA_DIRS="dist/AnimeDlp.app/Contents/Frameworks/share" \
-          python3 -c "
-          import gi
-          gi.require_version('Gtk', '4.0')
-          gi.require_version('Adw', '1')
-          from gi.repository import Adw, Gtk
-          Adw.init()
-          print('GTK', Gtk.get_major_version(), Gtk.get_minor_version())
-          print('Adwaita', Adw.MAJOR_VERSION, Adw.MINOR_VERSION)
-          "
 
       - name: Create .dmg installer
         run: |
           DMG_NAME="${{ steps.artifact-info.outputs.dmg }}"
+          # create-dmg из arm64 Homebrew подходит — это инструмент упаковки,
+          # его архитектура не влияет на содержимое DMG.
           create-dmg \
             --volname "AnimeDlp" \
             --window-size 600 400 \
