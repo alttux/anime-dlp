@@ -203,3 +203,62 @@ def get_download_link(
         seria_num=episode,
         translation_id=translation_id,
     )
+
+
+def get_anime_by_shikimori_id(shikimori_id: str | int) -> dict | None:
+    """Ищет полную запись Kodik по shikimori_id."""
+    if not shikimori_id:
+        return None
+    sid = str(shikimori_id).strip()
+    cache_key = f"item:shikimori:{sid}"
+    cached = cache.get_cached_json(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        parser = _get_parser()
+        res = parser.search_by_id(sid, "shikimori")
+        if res and isinstance(res, list) and isinstance(res[0], dict):
+            item = res[0]
+            cache.store_json(cache_key, item)
+            return item
+    except Exception:
+        pass
+    return None
+
+
+def get_shikimori_additional_info(
+    shikimori_id: str | int | None, shikimori_url: str | None = None
+) -> dict:
+    """Получает доп. информацию с Shikimori (связанные аниме, авторы, скриншоты)
+    через parser.additional_anime_info(). Результат кэшируется в CACHE_DIR.
+    """
+    if not shikimori_id and not shikimori_url:
+        return {}
+
+    sid = str(shikimori_id).strip() if shikimori_id else ""
+    cache_key = f"shiki_add:{sid or shikimori_url}"
+    cached = cache.get_cached_json(cache_key)
+    if cached is not None:
+        return cached
+
+    url = shikimori_url
+    if not url and sid:
+        url_sid = sid if sid.startswith("z") else f"z{sid}"
+        url = f"https://shikimori.io/animes/{url_sid}"
+
+    if not url:
+        return {}
+
+    try:
+        from anime_parsers_ru import ShikimoriParser
+
+        parser = ShikimoriParser()
+        data = parser.additional_anime_info(url)
+        if isinstance(data, dict):
+            cache.store_json(cache_key, data)
+            return data
+    except Exception:
+        pass
+
+    return {}

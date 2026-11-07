@@ -56,6 +56,44 @@ class AnimeServiceTests(unittest.TestCase):
             strict=False,
         )
 
+    @patch("anime_dlp.core.anime_service.cache.get_cached_json")
+    @patch("anime_dlp.core.anime_service.cache.store_json")
+    @patch("anime_dlp.core.anime_service._get_parser")
+    def test_get_anime_by_shikimori_id(self, mock_get_parser, mock_store_json, mock_get_cache):
+        from anime_dlp.core.anime_service import get_anime_by_shikimori_id
+
+        mock_get_cache.return_value = None
+        mock_parser = MagicMock()
+        mock_parser.search_by_id.return_value = [
+            {"title": "Fullmetal Alchemist", "shikimori_id": "5114"}
+        ]
+        mock_get_parser.return_value = mock_parser
+
+        item = get_anime_by_shikimori_id("5114")
+        self.assertIsNotNone(item)
+        self.assertEqual(item["title"], "Fullmetal Alchemist")
+        mock_parser.search_by_id.assert_called_once_with("5114", "shikimori")
+        mock_store_json.assert_called_once_with("item:shikimori:5114", item)
+
+    @patch("anime_dlp.core.anime_service.cache.get_cached_json")
+    @patch("anime_dlp.core.anime_service.cache.store_json")
+    @patch("anime_parsers_ru.ShikimoriParser")
+    def test_get_shikimori_additional_info(self, mock_shiki_parser_cls, mock_store_json, mock_get_cache):
+        from anime_dlp.core.anime_service import get_shikimori_additional_info
+
+        mock_get_cache.return_value = None
+        mock_instance = MagicMock()
+        mock_instance.additional_anime_info.return_value = {
+            "related": [{"name": "Season 2", "url": "/animes/58514"}]
+        }
+        mock_shiki_parser_cls.return_value = mock_instance
+
+        res = get_shikimori_additional_info("54492")
+        self.assertIn("related", res)
+        self.assertEqual(len(res["related"]), 1)
+        mock_instance.additional_anime_info.assert_called_once_with("https://shikimori.io/animes/z54492")
+        mock_store_json.assert_called_once_with("shiki_add:54492", res)
+
 
 if __name__ == "__main__":
     unittest.main()

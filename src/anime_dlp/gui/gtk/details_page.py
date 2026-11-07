@@ -1,3 +1,4 @@
+import re
 import threading
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anim
 from anime_dlp.core.cache import fetch_image_cached
 from anime_dlp.gui import prefetch
 from anime_dlp.gui.formatting import format_time
+from anime_dlp.gui.gtk.related_card import RelatedAnimeCard
 
 
 class DetailsPage(Adw.NavigationPage):
@@ -25,6 +27,8 @@ class DetailsPage(Adw.NavigationPage):
         self.play_buttons: dict[int, Gtk.Button] = {}
         self._syncing_select_all = False
         self._syncing_favorite = False
+        self._related_items: list[dict] | None = None
+        self.related_box: Gtk.Box | None = None
 
         toolbar_view = Adw.ToolbarView()
         toolbar_view.add_top_bar(Adw.HeaderBar())
@@ -93,6 +97,9 @@ class DetailsPage(Adw.NavigationPage):
 
         threading.Thread(target=self._fetch_info_worker, daemon=True).start()
 
+        if self.item.get("shikimori_id"):
+            threading.Thread(target=self._fetch_related_worker, daemon=True).start()
+
         poster_url = extract_anime_info(self.item).poster_url
         if poster_url:
             threading.Thread(
@@ -117,12 +124,101 @@ class DetailsPage(Adw.NavigationPage):
 
     def _fetch_info_worker(self):
         try:
+            sid = self.item.get("shikimori_id")
+            if sid and not self.item.get("material_data", {}).get("description"):
+                from anime_dlp.core.anime_service import get_anime_by_shikimori_id
+
+                full_item = get_anime_by_shikimori_id(sid)
+                if full_item:
+                    for k, v in full_item.items():
+                        if k not in self.item or not self.item[k]:
+                            self.item[k] = v
+                    if "material_data" in full_item:
+                        md = self.item.setdefault("material_data", {})
+                        for mk, mv in full_item["material_data"].items():
+                            if mk not in md or not md[mk]:
+                                md[mk] = mv
+
             info = prefetch.get_or_fetch(self.item["shikimori_id"])
             error = None
         except Exception as exc:
             info = None
             error = str(exc)
         GLib.idle_add(self._on_info_loaded, info, error)
+
+    def _fetch_related_worker(self):
+        sid = self.item.get("shikimori_id")
+        shiki_url = self.item.get("material_data", {}).get("shikimori_url")
+        from anime_dlp.core.anime_service import get_shikimori_additional_info
+
+        info = get_shikimori_additional_info(sid, shiki_url)
+        raw_related = info.get("related", []) if isinstance(info, dict) else []
+        related_animes = [
+            r for r in raw_related
+            if isinstance(r, dict) and "/animes/" in r.get("url", "")
+        ]
+        GLib.idle_add(self._on_related_loaded, related_animes)
+
+    def _on_related_loaded(self, related_animes: list[dict]):
+        self._related_items = related_animes
+        if self.related_box is not None:
+            self._populate_related_box()
+        return GLib.SOURCE_REMOVE
+
+    def _populate_related_box(self):
+        if self.related_box is None:
+            return
+
+        while child := self.related_box.get_first_child():
+            self.related_box.remove(child)
+
+        if not self._related_items:
+            self.related_box.set_visible(False)
+            return
+
+        header_label = Gtk.Label(
+            label="Связанные аниме",
+            xalign=0,
+            css_classes=["title-4", "heading"],
+        )
+        self.related_box.append(header_label)
+
+        scrolled = Gtk.ScrolledWindow(
+            hscrollbar_policy=Gtk.PolicyType.AUTOMATIC,
+            vscrollbar_policy=Gtk.PolicyType.NEVER,
+            hexpand=True,
+        )
+        cards_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        cards_box.set_margin_top(4)
+        cards_box.set_margin_bottom(8)
+
+        for rel in self._related_items:
+            card = RelatedAnimeCard(rel, on_click=self._on_related_clicked)
+            cards_box.append(card)
+
+        scrolled.set_child(cards_box)
+        self.related_box.append(scrolled)
+        self.related_box.set_visible(True)
+
+    def _on_related_clicked(self, related: dict):
+        url = related.get("url", "")
+        m = re.search(r"/animes/(?:z)?(\d+)", url)
+        if not m:
+            self.window.show_toast(f"Не удалось открыть «{related.get('name')}»")
+            return
+        sid = m.group(1)
+        item = {
+            "title": related.get("name", "Anime"),
+            "shikimori_id": sid,
+            "material_data": {
+                "title": related.get("name"),
+                "anime_title": related.get("name"),
+                "poster_url": related.get("picture"),
+                "anime_poster_url": related.get("picture"),
+                "anime_kind": related.get("type"),
+            },
+        }
+        self.window.push_page(DetailsPage(window=self.window, item=item))
 
     def _on_info_loaded(self, info: dict | None, error: str | None):
         if error or not info:
@@ -154,6 +250,15 @@ class DetailsPage(Adw.NavigationPage):
                 hexpand=True,
             )
             self.form_box.append(description_label)
+
+        # Связанные аниме под описанием
+        self.related_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=8, hexpand=True
+        )
+        self.related_box.set_visible(False)
+        self.form_box.append(self.related_box)
+        if self._related_items is not None:
+            self._populate_related_box()
 
         translation_group = Adw.PreferencesGroup(title="Озвучка")
         self.translation_combo = Adw.ComboRow(title="Вариант озвучки")
@@ -304,6 +409,13 @@ class DetailsPage(Adw.NavigationPage):
             css_classes=["title-1"],
         )
 
+        sid = self.item.get("shikimori_id")
+        shiki_url = (self.item.get("material_data") or {}).get("shikimori_url")
+        if not shiki_url and sid:
+            shiki_sid = str(sid).strip()
+            shiki_sid = shiki_sid if shiki_sid.startswith("z") else f"z{shiki_sid}"
+            shiki_url = f"https://shikimori.one/animes/{shiki_sid}"
+
         self.favorite_button = Gtk.ToggleButton(
             active=favorites.is_favorite(self.item.get("shikimori_id")),
             valign=Gtk.Align.CENTER,
@@ -314,6 +426,18 @@ class DetailsPage(Adw.NavigationPage):
 
         title_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, hexpand=True)
         title_row.append(title_label)
+        if shiki_url:
+            shiki_btn = Gtk.LinkButton(
+                uri=shiki_url,
+                tooltip_text=f"Открыть на Shikimori ({shiki_url})",
+                valign=Gtk.Align.CENTER,
+                css_classes=["flat"],
+            )
+            shiki_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+            shiki_box.append(Gtk.Image.new_from_icon_name("web-browser-symbolic"))
+            shiki_box.append(Gtk.Label(label="Shikimori"))
+            shiki_btn.set_child(shiki_box)
+            title_row.append(shiki_btn)
         title_row.append(self.favorite_button)
 
         text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, hexpand=True)
