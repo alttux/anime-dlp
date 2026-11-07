@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#62a0ea"/>
+      <stop offset="1" stop-color="#1c71d8"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#deddda"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
+
+  <!-- film strip perforations -->
+  <g fill="#ffffff" opacity="0.28">
+    <rect x="20" y="26" width="9" height="9" rx="2.5"/>
+    <rect x="20" y="45" width="9" height="9" rx="2.5"/>
+    <rect x="20" y="64" width="9" height="9" rx="2.5"/>
+    <rect x="20" y="83" width="9" height="9" rx="2.5"/>
+    <rect x="99" y="26" width="9" height="9" rx="2.5"/>
+    <rect x="99" y="45" width="9" height="9" rx="2.5"/>
+    <rect x="99" y="64" width="9" height="9" rx="2.5"/>
+    <rect x="99" y="83" width="9" height="9" rx="2.5"/>
+  </g>
+
+  <!-- download arrow -->
+  <g fill="url(#arrow)">
+    <rect x="57" y="30" width="14" height="38" rx="7"/>
+    <path d="M 64 96 L 40 64 h 48 Z"/>
+  </g>
+
+  <!-- baseline tray -->
+  <rect x="40" y="102" width="48" height="10" rx="5" fill="#ffffff" opacity="0.9"/>
+</svg>

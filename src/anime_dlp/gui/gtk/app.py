@@ -1,4 +1,5 @@
 import sys
+from importlib import resources
 from pathlib import Path
 
 import gi
@@ -8,6 +9,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, Gtk
 
+from anime_dlp import about
 from anime_dlp.core import episodes
 from anime_dlp.gui.gtk.window import AnimeDlpWindow
 
@@ -75,6 +77,51 @@ flowboxchild:selected {
 """
 
 
+def _setup_icon_theme() -> None:
+    display = Gdk.Display.get_default()
+    if display is None:
+        return
+    theme = Gtk.IconTheme.get_for_display(display)
+
+    candidates: list[Path] = []
+
+    # 1. Ресурсы пакета (src/anime_dlp/gui/assets/icons)
+    try:
+        assets_icons = resources.files("anime_dlp.gui") / "assets" / "icons"
+        candidates.append(Path(str(assets_icons)))
+    except Exception:
+        pass
+
+    # 2. PyInstaller-бандл (sys._MEIPASS)
+    if getattr(sys, "frozen", False):
+        bundle_root = Path(sys._MEIPASS)
+        candidates.extend(
+            [
+                bundle_root / "anime_dlp" / "gui" / "assets" / "icons",
+                bundle_root / "share" / "icons" / "hicolor" / "512x512" / "apps",
+                bundle_root / "share" / "icons" / "hicolor" / "scalable" / "apps",
+                bundle_root / "share" / "icons",
+                bundle_root / "data" / "icons",
+            ]
+        )
+
+    # 3. Исходный код / репозиторий
+    candidates.extend(
+        [
+            Path(__file__).resolve().parent.parent / "assets" / "icons",
+            Path(__file__).resolve().parents[4] / "data" / "icons",
+        ]
+    )
+
+    current_paths = set(theme.get_search_path())
+    for path in candidates:
+        if path.is_dir() and str(path) not in current_paths:
+            theme.add_search_path(str(path))
+            current_paths.add(str(path))
+
+    Gtk.Window.set_default_icon_name(about.APP_ID)
+
+
 def _on_shutdown(_app):
     episodes.cancel_all()
     # Плеер импортируется лениво (нужен GStreamer) — останавливаем, только
@@ -85,9 +132,10 @@ def _on_shutdown(_app):
 
 
 def run_gui(download_dir: Path) -> int:
-    app = Adw.Application(application_id="io.github.alttux.AnimeDlp")
+    app = Adw.Application(application_id=about.APP_ID)
 
     def on_activate(app):
+        _setup_icon_theme()
         provider = Gtk.CssProvider()
         provider.load_from_string(_APP_CSS)
         Gtk.StyleContext.add_provider_for_display(

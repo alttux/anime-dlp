@@ -104,6 +104,7 @@ jobs:
             --collect-all anime_parsers_ru \
             --copy-metadata anime-dlp \
             --add-data "src/anime_dlp/gui/assets/genre_posters:anime_dlp/gui/assets/genre_posters" \
+            --add-data "src/anime_dlp/gui/assets/icons:anime_dlp/gui/assets/icons" \
             packaging/macos_gui_entry.py
 
       - name: Set app bundle version

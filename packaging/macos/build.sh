@@ -45,6 +45,9 @@ pyinstaller \
   --add-data "$BREW_PREFIX/share/icons/Adwaita:share/icons/Adwaita" \
   --add-data "$BREW_PREFIX/share/icons/hicolor:share/icons/hicolor" \
   --add-data "src/anime_dlp/gui/assets/genre_posters:anime_dlp/gui/assets/genre_posters" \
+  --add-data "src/anime_dlp/gui/assets/icons:anime_dlp/gui/assets/icons" \
+  --add-data "src/anime_dlp/gui/assets/icons/io.github.alttux.AnimeDlp.png:share/icons/hicolor/512x512/apps" \
+  --add-data "src/anime_dlp/gui/assets/icons/io.github.alttux.AnimeDlp.svg:share/icons/hicolor/scalable/apps" \
   "${GST_BUNDLE_ARGS[@]}" \
   packaging/macos_gui_entry.py
 

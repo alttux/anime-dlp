@@ -2,6 +2,7 @@ from pathlib import Path
 
 from gi.repository import Adw
 
+from anime_dlp import about
 from anime_dlp.gui.formatting import APP_TITLE
 from anime_dlp.gui.gtk.home_page import HomePage
 
@@ -13,6 +14,7 @@ class AnimeDlpWindow(Adw.ApplicationWindow):
 
         self.set_default_size(720, 560)
         self.set_title(APP_TITLE)
+        self.set_icon_name(about.APP_ID)
 
         self.nav_view = Adw.NavigationView()
         self.nav_view.add(HomePage(window=self))
