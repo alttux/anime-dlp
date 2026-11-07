@@ -1,0 +1,191 @@
+name: macOS Universal build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag_name:
+        description: "Тег релиза, к которому нужно прикрепить собранные файлы"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: macOS universal2 (.app + .dmg)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref }}
+
+      - name: Install universal2 Python
+        run: |
+          set -euo pipefail
+          curl -LO https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg
+          sudo installer -pkg python-3.12.10-macos11.pkg -target /
+          echo "/Library/Frameworks/Python.framework/Versions/3.12/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python3.12 -m pip install --upgrade pip setuptools wheel
+          python3.12 -m pip install delocate==0.13.0
+
+          mkdir -p wheelhouse/arm64 wheelhouse/x86_64 wheelhouse/universal2
+
+          python3.12 -m pip download \
+            --only-binary=:all: \
+            --platform macosx_11_0_arm64 \
+            --python-version 3.12 \
+            --implementation cp \
+            -d wheelhouse/arm64 \
+            PyQt6-Qt6==6.8.2
+
+          python3.12 -m pip download \
+            --only-binary=:all: \
+            --platform macosx_10_14_x86_64 \
+            --python-version 3.12 \
+            --implementation cp \
+            -d wheelhouse/x86_64 \
+            PyQt6-Qt6==6.8.2
+
+          delocate-merge \
+            wheelhouse/arm64/PyQt6_Qt6-*.whl \
+            wheelhouse/x86_64/PyQt6_Qt6-*.whl \
+            -w wheelhouse/universal2
+
+          python3.12 -m pip install --no-deps wheelhouse/universal2/*.whl
+          python3.12 -m pip install "PyQt6==6.8.1"
+          python3.12 -m pip install .
+          python3.12 -m pip install pyinstaller==6.13.0
+
+      - name: Validate macOS GUI dependencies
+        run: |
+          set -euo pipefail
+          python3.12 -m pip check
+          python3.12 -c "import PyQt6.QtCore, PyQt6.QtGui, PyQt6.QtWidgets; import anime_dlp.gui.qt.app; print('GUI dependencies validated successfully')"
+
+      - name: Determine artifact names
+        id: artifact-info
+        run: |
+          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          if [ -z "$VERSION" ]; then
+            VERSION=$(date +%Y%m%d)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "dmg=AnimeDlp-macOS-${VERSION}-universal.dmg" >> "$GITHUB_OUTPUT"
+
+      - name: Build app with PyInstaller
+        run: |
+          set -euo pipefail
+          python3.12 -m PyInstaller \
+            --noconfirm \
+            --windowed \
+            --target-arch universal2 \
+            --name "AnimeDlp" \
+            --icon packaging/macos/AnimeDlp.icns \
+            --collect-all anime_parsers_ru \
+            --copy-metadata anime-dlp \
+            --add-data "src/anime_dlp/gui/assets/genre_posters:anime_dlp/gui/assets/genre_posters" \
+            packaging/macos_gui_entry.py
+
+      - name: Set app bundle version
+        run: |
+          VERSION="${{ steps.artifact-info.outputs.version }}"
+          PLIST="dist/AnimeDlp.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$PLIST"
+
+      - name: Validate universal2 app bundle
+        run: |
+          set -euo pipefail
+          ICON_FILE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' \
+            'dist/AnimeDlp.app/Contents/Info.plist')"
+          test -n "$ICON_FILE"
+          test -f "dist/AnimeDlp.app/Contents/Resources/$ICON_FILE" \
+            || test -f "dist/AnimeDlp.app/Contents/Resources/${ICON_FILE}.icns"
+          test -d "dist/AnimeDlp.app/Contents/Resources/anime_dlp/gui/assets/genre_posters" \
+            || test -d "dist/AnimeDlp.app/Contents/Frameworks/anime_dlp/gui/assets/genre_posters"
+
+          found=0
+          while IFS= read -r -d '' file; do
+            if file "$file" | grep -q "Mach-O"; then
+              found=1
+              archs="$(lipo -archs "$file" 2>/dev/null || true)"
+              case "$archs" in
+                *arm64*x86_64*|*x86_64*arm64*) ;;
+                *)
+                  echo "Missing universal2 slices in $file: ${archs:-unknown}" >&2
+                  exit 1
+                  ;;
+              esac
+            fi
+          done < <(find "dist/AnimeDlp.app" -type f -print0)
+
+          if [ "$found" -eq 0 ]; then
+            echo "No Mach-O files found in app bundle" >&2
+            exit 1
+          fi
+          echo "All Mach-O binaries in AnimeDlp.app are verified universal2 (arm64 + x86_64)!"
+
+      - name: Create DMG
+        run: |
+          set -euo pipefail
+          DMG_NAME="${{ steps.artifact-info.outputs.dmg }}"
+          chmod +x packaging/macos/build_dmg.sh
+          packaging/macos/build_dmg.sh \
+            "dist/AnimeDlp.app" \
+            "AnimeDlp" \
+            "dist/$DMG_NAME"
+
+      - name: Validate DMG
+        run: |
+          set -euo pipefail
+          DMG_NAME="${{ steps.artifact-info.outputs.dmg }}"
+          for DMG in "dist/$DMG_NAME"; do
+            MOUNT_DIR="$(mktemp -d)"
+            DEVICE="$(hdiutil attach \
+              -readonly \
+              -nobrowse \
+              -mountpoint "$MOUNT_DIR" \
+              "$DMG" \
+              | awk '/^\/dev\// { print $1; exit }')"
+
+            test -d "$MOUNT_DIR/AnimeDlp.app"
+            test -L "$MOUNT_DIR/Applications"
+            test "$(readlink "$MOUNT_DIR/Applications")" = "/Applications"
+            hdiutil detach "$DEVICE"
+            rmdir "$MOUNT_DIR"
+          done
+          echo "DMG validation successful!"
+
+      - name: Generate DMG checksum
+        run: |
+          DMG_NAME="${{ steps.artifact-info.outputs.dmg }}"
+          shasum -a 256 "dist/$DMG_NAME" > "dist/$DMG_NAME.sha256"
+          cat "dist/$DMG_NAME.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anime-dlp-${{ steps.artifact-info.outputs.version }}-macos-universal-dmg
+          path: dist/${{ steps.artifact-info.outputs.dmg }}
+
+      - name: Attach DMG to release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag_name != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          files: |
+            dist/${{ steps.artifact-info.outputs.dmg }}
+            dist/${{ steps.artifact-info.outputs.dmg }}.sha256

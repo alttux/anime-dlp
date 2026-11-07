@@ -18,19 +18,20 @@ from pathlib import Path
 
 if getattr(sys, "frozen", False):
     bundle_resources = Path(sys._MEIPASS)
-    os.environ["GI_TYPELIB_PATH"] = str(bundle_resources / "gi_typelibs")
-    os.environ["XDG_DATA_DIRS"] = (
-        str(bundle_resources / "share") + os.pathsep + os.environ.get("XDG_DATA_DIRS", "")
-    )
-    os.environ["GSETTINGS_SCHEMA_DIR"] = str(
-        bundle_resources / "share" / "glib-2.0" / "schemas"
-    )
-    # Только плагины из бандла: системные из Homebrew в .app не нужны и
-    # могут не совпасть по версии с библиотеками внутри бандла.
-    os.environ["GST_PLUGIN_SYSTEM_PATH"] = str(bundle_resources / "gst_plugins")
-    os.environ["GST_PLUGIN_SCANNER"] = str(
-        bundle_resources / "gst_libexec" / "gst-plugin-scanner"
-    )
+    if (bundle_resources / "gi_typelibs").exists():
+        os.environ["GI_TYPELIB_PATH"] = str(bundle_resources / "gi_typelibs")
+        os.environ["XDG_DATA_DIRS"] = (
+            str(bundle_resources / "share") + os.pathsep + os.environ.get("XDG_DATA_DIRS", "")
+        )
+        os.environ["GSETTINGS_SCHEMA_DIR"] = str(
+            bundle_resources / "share" / "glib-2.0" / "schemas"
+        )
+        # Только плагины из бандла: системные из Homebrew в .app не нужны и
+        # могут не совпасть по версии с библиотеками внутри бандла.
+        os.environ["GST_PLUGIN_SYSTEM_PATH"] = str(bundle_resources / "gst_plugins")
+        os.environ["GST_PLUGIN_SCANNER"] = str(
+            bundle_resources / "gst_libexec" / "gst-plugin-scanner"
+        )
 
 from anime_dlp.config import DOWNLOAD_DIR
 from anime_dlp.gui import run_gui

@@ -14,7 +14,10 @@ def run_gui(download_dir: Path) -> int:
     if backend == "qt":
         from anime_dlp.gui.qt.app import run_gui as _run_gui
     else:
-        from anime_dlp.gui.gtk.app import run_gui as _run_gui
+        try:
+            from anime_dlp.gui.gtk.app import run_gui as _run_gui
+        except ImportError:
+            from anime_dlp.gui.qt.app import run_gui as _run_gui
     return _run_gui(download_dir)
 
 

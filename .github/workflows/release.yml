@@ -127,6 +127,16 @@ jobs:
     with:
       tag_name: ${{ needs.tag.outputs.tag }}
 
+  macos-universal:
+    name: macOS artifacts (Universal2)
+    needs: tag
+    if: needs.tag.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/macos-universal-build.yml
+    with:
+      tag_name: ${{ needs.tag.outputs.tag }}
+
   flatpak:
     name: Flatpak artifact
     needs: tag

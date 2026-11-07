@@ -126,7 +126,8 @@ anime-dlp/
 │   ├── flatpak.yml                # CI: сборка Flatpak (Linux)
 │   ├── windows-build.yml          # CI: сборка Windows CLI .exe (PyInstaller, без GUI)
 │   ├── macos-build.yml            # CI: сборка macOS Apple Silicon .app + .dmg (GUI, Homebrew + PyInstaller)
-│   └── macos-intel-build.yml      # CI: отдельная сборка macOS Intel x86_64 .app + .dmg (GUI, Homebrew + PyInstaller)
+│   ├── macos-intel-build.yml      # CI: отдельная сборка macOS Intel x86_64 .app + .dmg (GUI, Homebrew + PyInstaller)
+│   └── macos-universal-build.yml  # CI: универсальная сборка macOS universal2 (arm64 + x86_64, PyQt6 + delocate-merge)
 ├── build.sh                       # Сборка Python-пакета (wheel/sdist) + бамп версии
 ├── pyproject.toml                 # Метаданные и зависимости пакета
 ├── requirements.txt                # Зафиксированные версии зависимостей
@@ -155,6 +156,7 @@ anime-dlp/
 - macOS (GitHub Actions):
   - Apple Silicon (`.github/workflows/macos-build.yml`, `runs-on: macos-15`, `aarch64`): ставит GTK4/libadwaita/PyGObject/GStreamer через Homebrew, генерирует иконку (`packaging/macos/make_icns.sh`), собирает `dist/AnimeDlp.app` через PyInstaller (`packaging/macos/build.sh` + `packaging/macos_gui_entry.py`), упаковывает в `.dmg` через `create-dmg` и прикрепляет к GitHub Release.
   - Intel (`.github/workflows/macos-intel-build.yml`, `runs-on: macos-13`, `x86_64`): отдельная сборка под архитектуру Intel x86_64 на базе Python 3.13 и Homebrew, бандлит GStreamer для воспроизведения видео, упаковывает в `AnimeDlp-macOS-<версия>-x86_64.dmg` и прикрепляет к релизу.
+  - Universal (`.github/workflows/macos-universal-build.yml`, `runs-on: macos-latest`, `universal2`): собирает толстый universal2-бинарник (arm64 + x86_64) на базе официального Python 3.12 universal2 с мержем нативных срезов через `delocate-merge`, собирает `dist/AnimeDlp.app` с валидацией через `lipo -archs` и упаковывает в `AnimeDlp-macOS-<версия>-universal.dmg`.
 - Windows (GitHub Actions, `.github/workflows/windows-build.yml`): собирает
   автономный CLI-исполняемый файл (`.exe`, без GUI) через PyInstaller
   (`packaging/pyinstaller_entry.py`) и прикрепляет его к GitHub Release при
