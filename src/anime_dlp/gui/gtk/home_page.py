@@ -6,6 +6,7 @@ from anime_dlp.gui.gtk.catalog_tab import CatalogTab
 from anime_dlp.gui.gtk.categories_tab import CategoriesTab
 from anime_dlp.gui.gtk.favorites_tab import FavoritesTab
 from anime_dlp.gui.gtk.search_tab import SearchTab
+from anime_dlp.gui.gtk.settings_dialog import show_settings_dialog
 from anime_dlp.gui.refresh import clear_all_caches
 
 
@@ -22,6 +23,14 @@ class HomePage(Adw.NavigationPage):
             stack=self.view_stack, title=APP_TITLE
         )
         header.set_title_widget(switcher_title)
+
+        settings_button = Gtk.Button(
+            icon_name="emblem-system-symbolic",
+            tooltip_text="Настройки",
+            css_classes=["flat"],
+        )
+        settings_button.connect("clicked", self._on_settings_clicked)
+        header.pack_start(settings_button)
 
         about_button = Gtk.Button(
             icon_name="help-about-symbolic",
@@ -84,6 +93,9 @@ class HomePage(Adw.NavigationPage):
     def _on_visible_child_changed(self, *_args):
         if self.view_stack.get_visible_child() is self.favorites_tab:
             self.favorites_tab.reload()
+
+    def _on_settings_clicked(self, _button):
+        show_settings_dialog(self.window)
 
     def _on_about_clicked(self, _button):
         show_about_dialog(self.window)

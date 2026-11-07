@@ -143,7 +143,19 @@ def run_gui(download_dir: Path) -> int:
             provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
-        win = AnimeDlpWindow(application=app, download_dir=download_dir)
+
+        from anime_dlp.config import DOWNLOAD_DIR
+        from anime_dlp.core import settings as app_settings
+        from anime_dlp.gui.gtk import theme_manager
+
+        theme_manager.init_theme()
+
+        saved_dir = app_settings.get_setting("download_dir")
+        effective_download_dir = download_dir
+        if saved_dir and download_dir == DOWNLOAD_DIR:
+            effective_download_dir = Path(saved_dir)
+
+        win = AnimeDlpWindow(application=app, download_dir=effective_download_dir)
         win.present()
 
     app.connect("activate", on_activate)

@@ -17,7 +17,8 @@ class AnimeDlpWindow(Adw.ApplicationWindow):
         self.set_icon_name(about.APP_ID)
 
         self.nav_view = Adw.NavigationView()
-        self.nav_view.add(HomePage(window=self))
+        self.home_page = HomePage(window=self)
+        self.nav_view.add(self.home_page)
 
         self.toast_overlay = Adw.ToastOverlay()
         self.toast_overlay.set_child(self.nav_view)

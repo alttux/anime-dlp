@@ -6,6 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent
 TOKEN_FILE = ".kodik_token"
 FAVORITES_FILE = "favorites.json"
 TRANSLATIONS_FILE = "translations.json"
+SETTINGS_FILE = "settings.json"
 
 # Внутри Flatpak каталог программы (/app) смонтирован только для чтения,
 # поэтому и загрузки, и токен уходят в пользовательские каталоги.

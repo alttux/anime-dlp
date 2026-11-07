@@ -180,3 +180,15 @@ def save_position(
         entry["series_count"] = series_count or 0
         entry["updated_at"] = time.time()
         _save_locked()
+
+
+def replace_all(data: dict) -> None:
+    """Полностью заменяет историю просмотров (для импорта данных)."""
+    global _data
+    with _lock:
+        _data = (
+            {str(k): v for k, v in data.items() if isinstance(v, dict)}
+            if isinstance(data, dict)
+            else {}
+        )
+        _save_locked()

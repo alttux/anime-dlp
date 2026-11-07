@@ -89,3 +89,11 @@ def toggle(item: dict) -> bool:
         return False
     add(item)
     return True
+
+
+def replace_all(items: list[dict]) -> None:
+    """Полностью заменяет список избранного (для импорта данных)."""
+    global _items
+    with _lock:
+        _items = [i for i in items if isinstance(i, dict)]
+        _save_locked()

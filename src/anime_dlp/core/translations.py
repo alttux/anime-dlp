@@ -135,3 +135,12 @@ def find_matching_translation_index(
                     return i
 
     return None
+
+
+def replace_all(data: dict) -> None:
+    """Полностью заменяет сохранённые озвучки (для импорта данных)."""
+    global _data
+    with _lock:
+        _data = data if isinstance(data, dict) else {}
+        _data.setdefault("by_anime", {})
+        _save_locked()

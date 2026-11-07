@@ -510,8 +510,25 @@ class DetailsPage(Adw.NavigationPage):
                 self.window.show_toast("Выберите хотя бы одну серию")
                 return
 
+        from anime_dlp.core import settings as app_settings
+
+        ask = app_settings.get_setting("ask_download_folder", True)
+        if not ask:
+            from anime_dlp.gui.gtk.download_page import DownloadPage
+
+            self.window.push_page(
+                DownloadPage(
+                    window=self.window,
+                    item=self.item,
+                    translation_id=translation["id"],
+                    eps_to_download=eps_to_download,
+                    download_dir=self.window.download_dir,
+                )
+            )
+            return
+
         dialog = Gtk.FileDialog(title="Выберите папку для скачивания")
-        # Стартуем с папки из -d (или папки загрузок по умолчанию).
+        # Стартуем с папки из настроек / -d
         dialog.set_initial_folder(Gio.File.new_for_path(str(self.window.download_dir)))
         dialog.select_folder(self.window, None, self._on_folder_chosen, (translation, eps_to_download))
 
