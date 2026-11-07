@@ -162,4 +162,3 @@ jobs:
           tag_name: ${{ inputs.tag_name }}
           files: |
             dist/${{ steps.artifact-info.outputs.dmg }}
-            dist/${{ steps.artifact-info.outputs.dmg }}.sha256
