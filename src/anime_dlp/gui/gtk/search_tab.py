@@ -2,6 +2,7 @@ import threading
 
 from gi.repository import Adw, GLib, Gtk
 
+from anime_dlp.core.anime_info import extract_anime_info
 from anime_dlp.core.anime_service import search_anime
 from anime_dlp.gui import prefetch
 from anime_dlp.labels import TYPE_MAP
@@ -108,10 +109,11 @@ class SearchTab(Gtk.Box):
         for item in items:
             raw_type = item.get("type", "")
             anime_type = TYPE_MAP.get(raw_type, raw_type)
-            year = item.get("year", "")
+            year = extract_anime_info(item).year or item.get("year", "")
+            subtitle = f"{year} · {anime_type}" if year else anime_type
             row = Adw.ActionRow(
                 title=item.get("title", "Unknown"),
-                subtitle=f"{year} · {anime_type}",
+                subtitle=subtitle,
                 activatable=True,
             )
             row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))

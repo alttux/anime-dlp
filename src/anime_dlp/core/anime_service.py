@@ -14,15 +14,17 @@ def _clean_surrogates(text: str) -> str:
 
 def _dedupe_by_anime(items: list[dict]) -> list[dict]:
     """Kodik часто отдаёт несколько записей (разные переводы/источники) для
-    одного и того же аниме — оставляем по одной записи на shikimori_id/
-    kinopoisk_id/imdb_id."""
+    одного и того же аниме — оставляем по одной записи на shikimori_id, либо
+    (kinopoisk_id, title)/(imdb_id, title), чтобы разные сезоны одного тайтла
+    с общим ID Кинопоиска/IMDb не склеивались между собой."""
     seen = {}
     for item in items:
         key = (
             item.get("shikimori_id")
-            or item.get("kinopoisk_id")
-            or item.get("imdb_id")
-            or item["link"]
+            or ((item.get("kinopoisk_id"), item.get("title")) if item.get("kinopoisk_id") else None)
+            or ((item.get("imdb_id"), item.get("title")) if item.get("imdb_id") else None)
+            or item.get("title")
+            or item.get("link")
         )
         if key not in seen:
             seen[key] = item
@@ -59,7 +61,7 @@ def reset_parser() -> None:
 
 def search_anime(title: str) -> list[dict]:
     title = _clean_surrogates(title)
-    cache_key = f"search:{title.strip().lower()}"
+    cache_key = f"search:v2:{title.strip().lower()}"
     cached = cache.get_cached_json(cache_key)
     if cached is not None:
         return cached
@@ -67,6 +69,7 @@ def search_anime(title: str) -> list[dict]:
     parser = _get_parser()
     results = parser.search(
         title=title,
+        limit=_POPULAR_PAGE_LIMIT,
         include_material_data=True,
         only_anime=True,
         strict=False,

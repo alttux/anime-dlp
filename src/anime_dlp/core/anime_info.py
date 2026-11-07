@@ -91,6 +91,29 @@ def _derive_age_rating(material: dict) -> str | None:
     return None
 
 
+def _derive_year(item: dict, material: dict) -> int | None:
+    """Определяет год выхода тайтла.
+
+    В Kodik поле material_data['year'] берётся с Кинопоиска/IMDb, где для всех
+    сезонов сериала указан год выхода первой части (например, 2023 для 3-го сезона
+    «Записок аптекаря»). Поэтому первоочередной приоритет отдаётся item['year']
+    (год конкретного релиза/сезона в Kodik) и году из material_data['aired_at']
+    (дата премьеры сезона на Shikimori). Поле material_data['year'] используется
+    только как запасной вариант.
+    """
+    year = _to_int(item.get("year"))
+    if year:
+        return year
+
+    aired_at = material.get("aired_at")
+    if isinstance(aired_at, str) and len(aired_at.strip()) >= 4:
+        aired_year = _to_int(aired_at.strip()[:4])
+        if aired_year:
+            return aired_year
+
+    return _to_int(material.get("year"))
+
+
 def extract_anime_info(item: dict) -> AnimeInfo:
     material = item.get("material_data") or {}
 
@@ -115,7 +138,7 @@ def extract_anime_info(item: dict) -> AnimeInfo:
     else:
         kind = None
 
-    year = _to_int(material.get("year")) or _to_int(item.get("year"))
+    year = _derive_year(item, material)
     season = _derive_season(material.get("aired_at"))
     age_rating = _derive_age_rating(material)
 
@@ -154,6 +177,7 @@ def has_any_info(info: AnimeInfo) -> bool:
         or info.score
         or info.episodes_total
         or info.episodes_aired
+        or info.year
     )
 
 

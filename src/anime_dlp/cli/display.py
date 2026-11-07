@@ -72,10 +72,11 @@ def show_anime_table(items: list[dict]):
     for i, item in enumerate(items, 1):
         raw_type = item.get("type", "")
         anime_type = TYPE_MAP.get(raw_type, raw_type)
+        year = extract_anime_info(item).year or item.get("year", "")
         table.add_row(
             str(i),
             f"[bold]{item.get('title', 'Unknown')}[/]",
-            str(item.get("year", "")),
+            str(year or ""),
             anime_type,
             str(item.get("shikimori_id") or "—"),
         )
@@ -89,6 +90,8 @@ def show_anime_info(item: dict):
         return
 
     facts = []
+    if info.year:
+        facts.append(f"Год: {info.year}")
     if info.status:
         facts.append(f"Статус: {info.status}")
     if info.episodes_total:

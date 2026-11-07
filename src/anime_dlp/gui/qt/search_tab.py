@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from anime_dlp.core.anime_info import extract_anime_info
 from anime_dlp.gui import prefetch
 from anime_dlp.gui.qt.widgets import ActionRow, StatusPage
 from anime_dlp.gui.qt.workers import SearchWorker
@@ -117,10 +118,11 @@ class SearchTab(QWidget):
         for item in items:
             raw_type = item.get("type", "")
             anime_type = TYPE_MAP.get(raw_type, raw_type)
-            year = item.get("year", "")
+            year = extract_anime_info(item).year or item.get("year", "")
+            subtitle = f"{year} · {anime_type}" if year else anime_type
             row = ActionRow(
                 title=item.get("title", "Unknown"),
-                subtitle=f"{year} · {anime_type}",
+                subtitle=subtitle,
                 activatable=True,
             )
             row.add_suffix(QLabel("›"))
