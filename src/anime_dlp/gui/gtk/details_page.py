@@ -4,7 +4,7 @@ from pathlib import Path
 import requests
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from anime_dlp.core import favorites, watch_history
+from anime_dlp.core import favorites, translations as translations_storage, watch_history
 from anime_dlp.core.anime_info import AnimeInfo, build_detail_rows, extract_anime_info
 from anime_dlp.core.cache import fetch_image_cached
 from anime_dlp.gui import prefetch
@@ -65,11 +65,24 @@ class DetailsPage(Adw.NavigationPage):
         content_box.set_vexpand(True)
 
         self.action_bar = Gtk.ActionBar()
+        self.play_main_button = Gtk.Button(
+            label="Воспроизвести",
+            icon_name="media-playback-start-symbolic",
+            css_classes=["pill"],
+            sensitive=False,
+        )
+        self.play_main_button.connect("clicked", self._on_play_main_clicked)
+
         self.download_button = Gtk.Button(
-            label="Скачать", css_classes=["suggested-action", "pill"]
+            label="Скачать",
+            css_classes=["suggested-action", "pill"],
+            sensitive=False,
         )
         self.download_button.connect("clicked", self._on_download_clicked)
+
+        # pack_end добавляет справа налево: [Воспроизвести] [Скачать]
         self.action_bar.pack_end(self.download_button)
+        self.action_bar.pack_end(self.play_main_button)
         content_box.append(self.action_bar)
 
         toolbar_view.set_content(content_box)
@@ -123,6 +136,8 @@ class DetailsPage(Adw.NavigationPage):
         # на обложке должна это учитывать.
         watch_history.set_series_count(self.item["shikimori_id"], self.series_count)
         self._build_form()
+        self.download_button.set_sensitive(True)
+        self.play_main_button.set_sensitive(True)
         self.stack.set_visible_child_name("form")
         return GLib.SOURCE_REMOVE
 
@@ -146,6 +161,12 @@ class DetailsPage(Adw.NavigationPage):
         for t in self.translations:
             model.append(f"{t['type']} — {t['name']}")
         self.translation_combo.set_model(model)
+
+        saved_idx = translations_storage.find_matching_translation_index(
+            self.translations, self.item.get("shikimori_id")
+        )
+        if saved_idx is not None and saved_idx < len(self.translations):
+            self.translation_combo.set_selected(saved_idx)
         # Adw.ComboRow по умолчанию обрезает (ellipsize) текст пунктов
         # выпадающего списка фиксированной шириной независимо от ширины
         # popover — своя list-factory без ellipsize показывает названия
@@ -187,6 +208,7 @@ class DetailsPage(Adw.NavigationPage):
 
     def _refresh_watched(self):
         """Подсвечивает просмотренные серии и пишет, где остановились."""
+        self._update_play_main_button()
         if not self.episode_rows:
             return
         sid = self.item["shikimori_id"]
@@ -203,7 +225,52 @@ class DetailsPage(Adw.NavigationPage):
             else:
                 row.set_subtitle("Определено как фильм" if episode == 0 else "")
 
+    def _save_current_translation(self):
+        if not hasattr(self, "translation_combo") or not self.translations:
+            return
+        selected = self.translation_combo.get_selected()
+        if selected != Gtk.INVALID_LIST_POSITION and selected < len(self.translations):
+            translations_storage.save_selected_translation(
+                self.item.get("shikimori_id"), self.translations[selected]
+            )
+
+    def _get_next_play_episode(self) -> int:
+        if self.is_movie:
+            return 0
+        first = 1
+        last = self.series_count or 1
+        if hasattr(self, "translation_combo") and self.translations:
+            selected = self.translation_combo.get_selected()
+            if selected != Gtk.INVALID_LIST_POSITION and selected < len(self.translations):
+                first, last = self.translations[selected].get(
+                    "series_range", (first, last)
+                )
+
+        sid = self.item.get("shikimori_id")
+        watched = watch_history.watched_episodes(sid)
+
+        for ep in range(first, last + 1):
+            if ep not in watched:
+                return ep
+
+        return first
+
+    def _update_play_main_button(self):
+        if not hasattr(self, "play_main_button") or not self.translations:
+            return
+        if self.is_movie:
+            self.play_main_button.set_tooltip_text("Воспроизвести фильм")
+        else:
+            ep = self._get_next_play_episode()
+            self.play_main_button.set_tooltip_text(f"Воспроизвести (серия {ep})")
+
+    def _on_play_main_clicked(self, _button):
+        self._save_current_translation()
+        episode = self._get_next_play_episode()
+        self._on_play_clicked(episode)
+
     def _on_play_clicked(self, episode: int):
+        self._save_current_translation()
         selected = self.translation_combo.get_selected()
         if selected == Gtk.INVALID_LIST_POSITION or not self.translations:
             self.window.show_toast("Выберите озвучку")
@@ -405,7 +472,9 @@ class DetailsPage(Adw.NavigationPage):
         label.set_label(list_item.get_item().get_string())
 
     def _on_translation_changed(self, combo_row, _pspec):
+        self._save_current_translation()
         self._apply_series_range()
+        self._update_play_main_button()
 
     def _apply_series_range(self):
         if self.is_movie or not self.translations or not self.episode_checks:
@@ -424,6 +493,7 @@ class DetailsPage(Adw.NavigationPage):
         self._sync_select_all_state()
 
     def _on_download_clicked(self, button):
+        self._save_current_translation()
         selected = self.translation_combo.get_selected()
         if selected == Gtk.INVALID_LIST_POSITION or not self.translations:
             self.window.show_toast("Выберите озвучку")

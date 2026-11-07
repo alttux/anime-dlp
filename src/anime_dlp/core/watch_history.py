@@ -24,6 +24,11 @@ from anime_dlp.core.cache import atomic_write
 
 HISTORY_FILE = "watched.json"
 
+STATUS_WATCHED = "Просмотрено"
+STATUS_IN_PROGRESS = "Начато"
+STATUS_NOT_STARTED = "Не начато"
+WATCH_STATUS_ORDER = [STATUS_WATCHED, STATUS_IN_PROGRESS, STATUS_NOT_STARTED]
+
 # Досмотрел до этой доли длительности — серия считается просмотренной
 # (титры в конце обычно никто не досматривает).
 WATCHED_FRACTION = 0.9
@@ -82,6 +87,41 @@ def is_fully_watched(shikimori_id: str | None) -> bool:
     if count <= 0:
         return 0 in watched
     return all(n in watched for n in range(1, count + 1))
+
+
+def get_watch_status(item: dict) -> str:
+    """Возвращает категорию просмотра для тайтла:
+    - 'Просмотрено': все серии просмотрены (или фильм просмотрен);
+    - 'Начато': начат просмотр хотя бы одной серии (или есть сохранённая позиция);
+    - 'Не начато': просмотр ещё не начинался.
+    """
+    sid = item.get("shikimori_id")
+    if not sid:
+        return STATUS_NOT_STARTED
+
+    with _lock:
+        entry = _load_locked().get(sid) or {}
+        watched = {int(e) for e in entry.get("watched", [])}
+        positions = entry.get("positions", {})
+        count = entry.get("series_count")
+
+    if not count:
+        from anime_dlp.core.anime_info import extract_anime_info
+
+        info = extract_anime_info(item)
+        count = info.episodes_total or item.get("episodes_count") or 0
+
+    if count <= 0:
+        if 0 in watched:
+            return STATUS_WATCHED
+    else:
+        if all(n in watched for n in range(1, count + 1)):
+            return STATUS_WATCHED
+
+    if watched or any(float(p or 0) > 0 for p in positions.values()):
+        return STATUS_IN_PROGRESS
+
+    return STATUS_NOT_STARTED
 
 
 def set_series_count(shikimori_id: str, series_count: int | None) -> None:
