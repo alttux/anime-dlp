@@ -9,7 +9,7 @@ class GenrePage(Adw.NavigationPage):
     только с другим источником страниц."""
 
     def __init__(self, window, genre: str):
-        super().__init__(title=genre, tag="genre")
+        super().__init__(title=genre)
         self.window = window
         self.genre = genre
 

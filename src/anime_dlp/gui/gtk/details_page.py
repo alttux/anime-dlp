@@ -15,7 +15,7 @@ from anime_dlp.gui.gtk.related_card import RelatedAnimeCard
 
 class DetailsPage(Adw.NavigationPage):
     def __init__(self, window, item: dict):
-        super().__init__(title=item.get("title", "Anime"), tag="details")
+        super().__init__(title=item.get("title", "Anime"))
         self.window = window
         self.item = item
         self.translations = []

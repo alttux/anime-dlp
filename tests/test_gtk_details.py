@@ -158,6 +158,21 @@ class GtkDetailsPageTests(unittest.TestCase):
         self.assertEqual(new_page.item["shikimori_id"], "58514")
         self.assertEqual(new_page.item["title"], "Монолог фармацевта 2")
 
+    @patch("anime_dlp.gui.gtk.details_page.fetch_image_cached")
+    @patch("anime_dlp.gui.gtk.details_page.prefetch.get_or_fetch")
+    def test_nested_details_page_push_no_duplicate_tag(self, mock_prefetch, mock_fetch_image):
+        nav = Adw.NavigationView()
+        window = MagicMock()
+        page1 = DetailsPage(window=window, item={"shikimori_id": "54492", "title": "Anime 1"})
+        page2 = DetailsPage(window=window, item={"shikimori_id": "58514", "title": "Anime 2"})
+        page3 = DetailsPage(window=window, item={"shikimori_id": "54492", "title": "Anime 1 again"})
+
+        nav.add(page1)
+        nav.push(page2)
+        self.assertEqual(nav.get_visible_page(), page2)
+        nav.push(page3)
+        self.assertEqual(nav.get_visible_page(), page3)
+
 
 if __name__ == "__main__":
     unittest.main()
