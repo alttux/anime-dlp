@@ -73,6 +73,15 @@ jobs:
           python3.12 -m pip check
           python3.12 -c "import PyQt6.QtCore, PyQt6.QtGui, PyQt6.QtWidgets; import anime_dlp.gui.qt.app; print('GUI dependencies validated successfully')"
 
+      - name: Create macOS icon
+        run: |
+          set -euo pipefail
+          if ! command -v rsvg-convert >/dev/null 2>&1; then
+            brew install librsvg
+          fi
+          chmod +x packaging/macos/make_icns.sh
+          ./packaging/macos/make_icns.sh
+
       - name: Determine artifact names
         id: artifact-info
         run: |
